@@ -19,4 +19,4 @@ util_work_from_home_cdap_N,work from home and cdap non-mandatory,"(work_from_hom
 util_work_from_home_cdap_H,work from home and cdap home,"(work_from_home==True) & (cdap_activity==""H"")",coef_work_from_home_cdap_H,
 # industry,,,,
 util_industry_business_srv,srv industry_business,@df.naics_code==54,coef_industry_business_srv,
-util_cdap_N_non_mandatory_accessibility,CDAP N and Disaggreage non-mandatory accessibility at home location,"(cdap_activity==""N"")*(othdiscr_accessibility + shopping_accessibility) / 2",coef_cdap_N_non_mandatory_accessibility,
+util_cdap_N_non_mandatory_accessibility,CDAP N and Disaggreage non-mandatory accessibility at home location,"(cdap_activity==""N"")*auPkRetail",coef_cdap_N_non_mandatory_accessibility,
