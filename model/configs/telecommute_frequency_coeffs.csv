@@ -41,19 +41,6 @@ coef_Income60to100k_4day,0.0,T
 coef_Income100to150k_4day,0.0,T
 coef_Income150kplus_4day,0.0,T
 coef_3plusAutos_4day,-0.5086281851316395,F
-coef_calib_2020_1day,0.0,T
-coef_calib_2025_1day,0.0,T
-coef_calib_2035_1day,0.0,T
-coef_calib_2050_1day,0.0,T
-coef_calib_2020_23day,0.0,T
-coef_calib_2025_23day,0.0,T
-coef_calib_2035_23day,0.0,T
-coef_calib_2050_23day,0.0,T
-coef_calib_2020_4day,0.0,T
-coef_calib_2025_4day,0.0,T
-coef_calib_2035_4day,0.0,T
-coef_calib_2050_4day,0.0,T
-coef_2016_1day,-0.1247850665609524,F
 coef_accomodation_1234day,-1.1672033007413072,F
 coef_agriculture_1234day,0.0,T
 coef_business_srv_1day,0.8048779013830238,F
@@ -67,7 +54,6 @@ coef_manufacturing_1day,0.0,T
 coef_mgmt_srv_1day,0.0,T
 coef_military_1day,0.0,T
 coef_retail_1day,-0.8320341753416274,F
-coef_2016_23day,-1.138520687534541,F
 coef_accomodation_23day,0.0,F
 coef_agriculture_23day,0.0,F
 coef_business_srv_23day,0.9228435480770156,F
@@ -81,7 +67,6 @@ coef_manufacturing_234day,0.0,T
 coef_mgmt_srv_23day,0.5723496481424273,F
 coef_military_234day,-0.512646790150494,F
 coef_retail_23day,-0.7576291501959187,F
-coef_2016_4day,-3.7059529398972826,F
 coef_accomodation_4day,0.0,F
 coef_agriculture_4day,0.0,F
 coef_business_srv_4day,1.117777186998694,F
