@@ -46,6 +46,7 @@ input_table_list:
       - pemploy
       - pstudent
       - ptype
+      - naics_code
   #
   # land_use (table index 'zone_id')
   #
