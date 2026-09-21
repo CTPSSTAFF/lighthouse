@@ -1,1 +1,1 @@
-from . import constraint_can_travel_alone
+from . import constraint_can_travel_alone as constraint_can_travel_alone
