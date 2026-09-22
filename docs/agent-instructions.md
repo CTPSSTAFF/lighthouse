@@ -44,7 +44,7 @@ The index is intentionally small. Agents read it for specialized work and retrie
 guides. This uses ordinary Markdown and file access rather than a vendor-specific invocation syntax.
 Do not use automatic imports for detailed task guides: imports would make them always-on context.
 
-Native skills are an optional future discovery layer. Codex and supported Copilot agents can discover
+Native skills are an optional discovery layer. Codex and supported Copilot agents can discover
 `.agents/skills/<task>/SKILL.md`. Such a skill should have a precise name/description and instruct the
 agent to read the canonical task guide, avoiding a second copy of the workflow. Claude native skills
 use a separate entry point; explicit routing through the baseline already provides a common fallback.
