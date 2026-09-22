@@ -4,7 +4,7 @@ name: Model tests
 "on":
   pull_request:
   push:
-    branches: [main, model-ci]
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '23 6 * * 1'

@@ -30,8 +30,7 @@ currently Linux-only.
 ## What runs in Actions
 
 Every pull request and push to `main` runs input and contract tests and a complete model run for 2,000
-households using two workers. The temporary `model-ci` push trigger allows validating this
-workflow before merge. Input checks verify configured CSV columns, frozen household IDs, skim dimensions, and zone mappings.
+households using two workers. Manual workflow dispatch allows validating a branch before merge. Input checks verify configured CSV columns, frozen household IDs, skim dimensions, and zone mappings.
 The contract job checks formatting of the new test infrastructure;
 it does not impose a new formatting standard on existing model files.
 
