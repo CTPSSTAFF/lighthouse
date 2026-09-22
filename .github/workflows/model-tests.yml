@@ -29,8 +29,8 @@ jobs:
       - run: uv sync --locked
       - name: Check test infrastructure formatting
         run: |
-          uv run --locked ruff check scripts/model_ci.py tests/test_model_ci.py
-          uv run --locked ruff format --check scripts/model_ci.py tests/test_model_ci.py
+          uv run --locked ruff check scripts/model_ci.py tests
+          uv run --locked ruff format --check scripts/model_ci.py tests
       - name: Run contract tests
         run: uv run --locked pytest tests -q --junitxml=test-results.xml
       - uses: actions/upload-artifact@v4
