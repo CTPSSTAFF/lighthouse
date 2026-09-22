@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: '0.12.13'
           enable-cache: true
@@ -33,7 +33,7 @@ jobs:
           uv run --locked ruff format --check scripts/model_ci.py tests
       - name: Run contract tests
         run: uv run --locked pytest tests -q --junitxml=test-results.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: contract-results
@@ -44,8 +44,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: '0.12.13'
           enable-cache: true
@@ -54,7 +54,7 @@ jobs:
         run: uv run --locked python scripts/model_ci.py
       - name: Save diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: model-report
           path: |
@@ -77,14 +77,14 @@ jobs:
           - name: single-process
             args: --single-process
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: '0.12.13'
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --locked python scripts/model_ci.py ${{ matrix.args }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: model-report-${{ matrix.name }}
