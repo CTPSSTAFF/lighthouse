@@ -1,0 +1,13 @@
+01/01/2026 12:00:00 - INFO - activitysim.core.mp_tasks - run_sub_simulations step prepare models resume_after None
+01/01/2026 12:00:00 - INFO - activitysim.core.mp_tasks - start process prepare
+01/01/2026 12:00:01 - INFO - activitysim.core.mp_tasks - prepare initialize_landuse : 0.636 seconds
+01/01/2026 12:00:02 - INFO - activitysim.core.mp_tasks - run_sub_simulations step choices_renamed models resume_after None
+01/01/2026 12:00:02 - INFO - activitysim.core.mp_tasks - start process choices_renamed_0
+01/01/2026 12:00:03 - INFO - activitysim.core.mp_tasks - choices_renamed_0 school_location : 0.001 seconds (0.0 minutes)
+01/01/2026 12:00:03 - INFO - activitysim.core.mp_tasks - choices_renamed_0 constraint_new_access : 0.001 seconds (0.0 minutes)
+01/01/2026 12:00:04 - INFO - activitysim.core.mp_tasks - start process choices_renamed_1
+01/01/2026 12:00:06 - INFO - activitysim.core.mp_tasks - choices_renamed_1 school_location : 2.00 seconds (0.0 minutes)
+01/01/2026 12:00:07 - INFO - activitysim.core.mp_tasks - choices_renamed_1 constraint_new_access : 1.00 seconds
+01/01/2026 12:00:08 - INFO - activitysim.core.mp_tasks - run_sub_simulations step export models resume_after None
+01/01/2026 12:00:09 - INFO - activitysim.core.mp_tasks - export write_tables : 1.00 seconds
+01/01/2026 12:00:10 - INFO - activitysim.core.tracing - Time to execute all models : 10.00 seconds (0.2 minutes)

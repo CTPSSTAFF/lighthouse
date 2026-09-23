@@ -1,0 +1,6 @@
+01/01/2026 12:00:00 - INFO - activitysim.core.mp_tasks - run_sub_simulations step choices_renamed models resume_after _
+01/01/2026 12:00:00 - INFO - activitysim.core.mp_tasks - start process choices_renamed_1
+01/01/2026 12:00:01 - INFO - activitysim.core.mp_tasks - choices_renamed_1 constraint_new_access : 0.02 seconds (0.0 minutes)
+01/01/2026 12:00:02 - INFO - activitysim.core.mp_tasks - process choices_renamed_1 completed
+01/01/2026 12:00:03 - INFO - activitysim.core.mp_tasks - export write_tables : 0.04 seconds (0.0 minutes)
+01/01/2026 12:00:04 - INFO - activitysim.core.tracing - Time to execute all models : 4.00 seconds (0.1 minutes)
