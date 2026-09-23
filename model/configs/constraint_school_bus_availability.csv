@@ -1,0 +1,7 @@
+Label,Description,Expression,school_bus,no_school_bus
+util_asc,ASC,@1,,coef_no_school_bus_asc
+util_non_school_age_child,school bus is unavailable for non school age child,@(df.age<MIN_SCHOOL_AGE)|(df.age>MAX_SCHOOL_AGE),coef_unavailable,
+util_school_k12,person attends k12 school,school_segment==1,coef_school_k12,
+util_dist_within_radius,home to school distance within school bus service radius,@(df.distance_to_school<SCHOOL_BUS_SERVICE_RADIUS_MILES),coef_dist_within_radius	
+util_areatype_urban,home area type is urban,@df.home_is_urban,coef_areatype_urban
+util_areatype_rural,home area type is rural,@df.home_is_rural,coef_areatype_rural
