@@ -4,7 +4,6 @@ import pandas as pd
 
 from activitysim.core import estimation, config, expressions, simulate
 from activitysim.core import workflow, los, tracing
-from activitysim.core.configuration.base import PreprocessorSettings
 from activitysim.core.configuration.logit import LogitComponentSettings
 
 logger = logging.getLogger("activitysim")
