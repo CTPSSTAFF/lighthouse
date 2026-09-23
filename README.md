@@ -2,6 +2,12 @@
 
 This is a light-weight, simplified ABM.
 
+## Agent instructions
+
+Shared coding-agent guidance lives in [AGENTS.md](AGENTS.md). See
+[Maintaining agent instructions](docs/agent-instructions.md) for Codex, Copilot, and Claude setup and
+for adding task-specific guides that are read only when relevant.
+
 ## Usage
 
 This project uses uv as Python manager. To install uv, please visit https://docs.astral.sh/uv/getting-started/installation/
