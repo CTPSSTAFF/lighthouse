@@ -1,141 +1,410 @@
 #!/usr/bin/env python3
-"""
-Simple CPU and memory tracker for Windows (also works cross-platform).
+"""Sample CPU/memory and track an ActivitySim run using its resolved run_list.txt.
 
-- Default interval: 0.5 seconds
-- Prints timestamp, CPU %, Memory Used (GB), Memory Available (GB), Available Memory (%)
-- Optional CSV logging with --csv FILE
-- Optional program log tracking with --log FILE
-- Sequence-aware step inference: only advances when steps complete in order
-- Wait-for-all-workers for mp_households (requires all mp_households_N workers to complete a step)
-- Phase-aware display (mp_initialize, mp_households, mp_summarize)
-- Step status shown (running; for households shows done/total workers)
-
-Usage examples:
-    python sys_monitor.py
-    python sys_monitor.py --interval 1.0
-    python sys_monitor.py --csv sys_usage.csv
-    python sys_monitor.py --log full/path/to/activitysim.log
+The run-list adapter is deliberately separate from execution tracking: ActivitySim's
+informational text format is not YAML or a versioned public interchange format.
 """
 
-import sys
-import os
-import time
 import argparse
+import ast
+import csv
+from dataclasses import dataclass
 from datetime import datetime
+import os
+from pathlib import Path
 import re
-from typing import Optional, Dict, Set, Tuple
+import sys
+import time
+from typing import Optional
 
 try:
     import psutil
 except ImportError:
     print(
-        "ERROR: 'psutil' is not installed.\n"
-        "Install it with:\n    python -m pip install psutil",
+        "ERROR: 'psutil' is not installed. Install it with: python -m pip install psutil",
         file=sys.stderr,
     )
     sys.exit(1)
 
-# --- Ordered step list and phase mapping -------------------------------------
 
-STEP_NAMES = [
-    ### mp_initialize step
-    "initialize_landuse",
-    "initialize_households",
-    ### mp_accessibility step
-    "compute_accessibility",
-    ### mp_households step
-    "school_location",
-    "workplace_location",
-    "auto_ownership_simulate",
-    "free_parking",
-    "cdap_simulate",
-    "mandatory_tour_frequency",
-    "mandatory_tour_scheduling",
-    "non_mandatory_tour_frequency",
-    "non_mandatory_tour_destination",
-    "non_mandatory_tour_scheduling",
-    "tour_mode_choice_simulate",
-    "atwork_subtour_frequency",
-    "atwork_subtour_destination",
-    "atwork_subtour_scheduling",
-    "atwork_subtour_mode_choice",
-    "stop_frequency",
-    "trip_purpose",
-    "trip_destination",
-    "trip_purpose_and_destination",
-    "trip_scheduling",
-    "trip_mode_choice",
-    ### mp_summarize step
-    "write_data_dictionary",
-    "write_trip_matrices",
-    "write_tables",
-]
-STEP_TO_PHASE: Dict[str, str] = {}
-for name in STEP_NAMES:
-    if name in {
-        "initialize_landuse",
-        "initialize_households",
-    }:
-        STEP_TO_PHASE[name] = "mp_initialize"
-    elif name in {
-        "compute_accessibility"
-    }:
-        STEP_TO_PHASE[name] = "mp_accessibility"
-    elif name in {
-        "write_data_dictionary",
-        "track_skim_usage",
-        "write_trip_matrices",
-        "write_tables",
-    }:
-        STEP_TO_PHASE[name] = "mp_summarize"
-    else:
-        STEP_TO_PHASE[name] = "mp_households"
+@dataclass(frozen=True)
+class Phase:
+    name: str
+    models: tuple[str, ...]
+    workers: tuple[str, ...]
+    resume_after: Optional[str] = None
+    completed_workers: tuple[str, ...] = ()
+    simulated: bool = False
 
 
-# --- Regex patterns (strict to avoid false matches) --------------------------
+@dataclass(frozen=True)
+class RunPlan:
+    models: tuple[str, ...]
+    phases: tuple[Phase, ...]
+    multiprocess: bool
+    resume_after: Optional[str]
 
-# Completion lines come from activitysim.core.mp_tasks and include a runtime like ": 12.34 seconds"
-# Examples:
-#  "INFO - activitysim.core.mp_tasks - mp_initialize initialize_landuse : 0.636 seconds"
-#  "INFO - activitysim.core.mp_tasks - mp_households_3 school_location : 290.146 seconds"
-#  "INFO - activitysim.core.mp_tasks - mp_summarize write_tables : 12.34 seconds"
-PAT_COMPLETED_INIT_SUM = re.compile(
-    rf"activitysim\.core\.mp_tasks\s*-\s*mp_(?:initialize|accessibility|summarize)\s+"
-    rf"({'|'.join(map(re.escape, STEP_NAMES))})\s*:\s*([\d.]+)\s+seconds\b",
-    re.IGNORECASE,
+    @classmethod
+    def from_text(cls, text: str) -> "RunPlan":
+        """Read the narrow print_run_list format, rejecting incomplete/ambiguous plans.
+
+        In particular, repeated ``step:`` blocks must not be loaded as a YAML
+        mapping (which could silently discard all but the last phase).
+        Ignore unrelated fields, but validate every field used for progress.
+        """
+        headers = {}
+        models = []
+        phases = []
+        breadcrumbs = {}
+        section = None
+        block = None
+        in_models = False
+        for line in text.splitlines():
+            value = line.strip()
+            if not value:
+                continue
+            if not line.startswith(" "):
+                in_models = False
+                if value in ("models:", "multiprocess_steps:", "breadcrumbs:"):
+                    section = value[:-1]
+                    block = None
+                elif ":" in value:
+                    key, val = value.split(":", 1)
+                    headers[key] = val.strip()
+                    section = None
+                continue
+            if section == "models":
+                if not value.startswith("- "):
+                    raise ValueError("Invalid models list in run_list.txt")
+                models.append(value[2:].strip())
+            elif section in ("multiprocess_steps", "breadcrumbs"):
+                if line.startswith("  step: "):
+                    name = value.split(":", 1)[1].strip()
+                    block = {"name": name, "models": []}
+                    in_models = False
+                    if section == "multiprocess_steps":
+                        phases.append(block)
+                    else:
+                        if name in breadcrumbs:
+                            raise ValueError("Duplicate breadcrumb phase")
+                        breadcrumbs[name] = block
+                elif block is not None:
+                    if section == "multiprocess_steps":
+                        if value == "models:":
+                            in_models = True
+                        elif in_models and value.startswith("- "):
+                            block["models"].append(value[2:].strip())
+                        else:
+                            in_models = False
+                            key, sep, val = value.partition(":")
+                            if sep and key in ("num_processes", "resume_after", "name"):
+                                if key == "name" and val.strip() != block["name"]:
+                                    raise ValueError("Inconsistent phase name")
+                                block[key] = val.strip()
+                    else:
+                        # print_run_list prints breadcrumb fields WITHOUT colons.
+                        key, _, val = value.partition(" ")
+                        if key in ("simulate", "completed"):
+                            try:
+                                block[key] = ast.literal_eval(val.strip())
+                            except (ValueError, SyntaxError) as exc:
+                                raise ValueError("Invalid resume breadcrumbs") from exc
+        if (
+            headers.get("multiprocess") not in ("True", "False")
+            or "resume_after" not in headers
+        ):
+            raise ValueError(
+                "Missing multiprocess/resume_after headers in run_list.txt"
+            )
+        if not models or any(not m for m in models) or len(set(models)) != len(models):
+            raise ValueError("Expected a nonempty, unique model sequence")
+        resume = headers["resume_after"]
+        resume = None if resume == "None" else resume
+        if resume not in (None, "_") and resume not in models:
+            raise ValueError("Resume checkpoint is not in the model sequence")
+        multiprocess = headers["multiprocess"] == "True"
+        if not multiprocess:
+            if phases or breadcrumbs:
+                raise ValueError("Unexpected phases in a single-process plan")
+            return cls(
+                tuple(models),
+                (Phase("single_process", tuple(models), ("MainProcess",), resume),),
+                False,
+                resume,
+            )
+        if not phases or [m for p in phases for m in p["models"]] != models:
+            raise ValueError("Phase model lists do not match the full model sequence")
+        names = [p["name"] for p in phases]
+        if len(set(names)) != len(names) or any(not n for n in names):
+            raise ValueError("Phase names must be nonempty and unique")
+        if list(breadcrumbs) != names[: len(breadcrumbs)]:
+            raise ValueError("Resume breadcrumbs do not match the phase sequence")
+        result = []
+        for p in phases:
+            try:
+                count = int(p.get("num_processes", ""))
+            except ValueError as exc:
+                raise ValueError("Missing/invalid resolved num_processes") from exc
+            if count < 1 or not p["models"]:
+                raise ValueError("Each phase needs models and a positive worker count")
+            workers = (
+                (p["name"],)
+                if count == 1
+                else tuple(f"{p['name']}_{i}" for i in range(count))
+            )
+            checkpoint = p.get("resume_after")
+            checkpoint = None if checkpoint == "None" else checkpoint
+            if checkpoint not in (None, "_") and checkpoint not in p["models"]:
+                raise ValueError("Phase resume checkpoint is not in that phase")
+            crumb = breadcrumbs.get(p["name"], {}) if resume else {}
+            completed = crumb.get("completed", [])
+            if not isinstance(completed, list) or any(
+                not isinstance(w, str) or w not in workers for w in completed
+            ):
+                raise ValueError("Invalid completed worker list")
+            simulated = crumb.get("simulate")
+            if simulated is not None and not isinstance(simulated, bool):
+                raise ValueError("Invalid simulate breadcrumb")
+            # A named checkpoint reruns workers even if they previously completed.
+            result.append(
+                Phase(
+                    p["name"],
+                    tuple(p["models"]),
+                    workers,
+                    checkpoint,
+                    tuple(completed) if checkpoint == "_" else (),
+                    simulated is True,
+                )
+            )
+        all_workers = [w for p in result for w in p.workers]
+        if len(set(all_workers)) != len(all_workers):
+            raise ValueError("Ambiguous worker names across phases")
+        return cls(tuple(models), tuple(result), True, resume)
+
+
+# Match logger and message structure, never a fixed vocabulary of model/phase names.
+LOG_MESSAGE = re.compile(
+    r"\b(activitysim\.core\.[\w.]+|activitysim\.cli\.run)\s*-\s*(.*)"
 )
-PAT_COMPLETED_ACCESS = re.compile(
-    rf"activitysim\.core\.mp_tasks\s*-\s*mp_accessibility_(\d+)\s+"
-    rf"({'|'.join(map(re.escape, STEP_NAMES))})\s*:\s*([\d.]+)\s+seconds\b",
-    re.IGNORECASE,
+DURATION = r"[\d.]+\s+seconds\b"
+COMPLETED = re.compile(rf"(\S+)\s+(\S+)\s*:\s*{DURATION}")
+PROCESS_DONE = re.compile(
+    r"process (\S+) completed(?: with exitcode 0)?$", re.IGNORECASE
 )
-PAT_COMPLETED_HH = re.compile(
-    rf"activitysim\.core\.mp_tasks\s*-\s*mp_households_(\d+)\s+"
-    rf"({'|'.join(map(re.escape, STEP_NAMES))})\s*:\s*([\d.]+)\s+seconds\b",
-    re.IGNORECASE,
-)
-
-# Worker start lines (to infer the mp_households worker count)
-# Example: "INFO - activitysim.core.mp_tasks - start process mp_households_7"
-PAT_START_WORKER = re.compile(
-    r"activitysim\.core\.mp_tasks\s*-\s*start process mp_households_(\d+)\b",
-    re.IGNORECASE,
-)
-PAT_START_ACCESS_WORKER = re.compile(
-    r"activitysim\.core\.mp_tasks\s*-\s*start process mp_accessibility_(\d+)\b",
-    re.IGNORECASE,
-)
-
-# Phase run lines (optional; for additional robustness/UX)
-# Example: "INFO - activitysim.core.mp_tasks - run_sub_simulations step mp_households models ..."
-PAT_RUN_PHASE = re.compile(
-    r"activitysim\.core\.mp_tasks\s*-\s*run_sub_simulations step (mp_initialize|mp_accessibility|mp_households|mp_summarize)\b",
-    re.IGNORECASE,
+PROCESS_FAILED = re.compile(r"process (\S+) failed with exitcode", re.IGNORECASE)
+SINGLE_DONE = re.compile(rf"time to execute run\.(\S+)\s*:\s*{DURATION}", re.IGNORECASE)
+RUN_DONE = re.compile(
+    rf"Time to execute all models(?: completed)?\s*:\s*{DURATION}", re.IGNORECASE
 )
 
 
-# --- Utilities ---------------------------------------------------------------
+class StepTracker:
+    """Report the earliest step not satisfied by every planned worker.
+
+    In resumed phases a worker completing a later step proves that its earlier
+    steps were run or restored. A request to resume alone does not prove that.
+    """
+
+    def __init__(self, plan: RunPlan):
+        self.plan = plan
+        self.phase_by_worker = {w: p for p in plan.phases for w in p.workers}
+        self.phase_by_model = {m: p for p in plan.phases for m in p.models}
+        self.reset()
+
+    def reset(self) -> None:
+        self.completed = {m: set() for m in self.plan.models}
+        self.resume_pending = {
+            w
+            for phase in self.plan.phases
+            if phase.resume_after and not phase.simulated
+            for w in phase.workers
+            if w not in phase.completed_workers
+        }
+        self.observed = False
+        self.failed = False
+        self.finished = False
+        for phase in self.plan.phases:
+            for model in phase.models:
+                self.completed[model].update(
+                    phase.workers if phase.simulated else phase.completed_workers
+                )
+
+    def complete(self, worker: str, model: str) -> None:
+        phase = self.phase_by_worker.get(worker)
+        if phase is None or model not in phase.models:
+            return
+        self.observed = True
+        self.resume_pending.discard(worker)
+        models = (
+            phase.models[: phase.models.index(model) + 1]
+            if phase.resume_after
+            else (model,)
+        )
+        for name in models:
+            self.completed[name].add(worker)
+
+    def update(self, line: str) -> None:
+        match = LOG_MESSAGE.search(line)
+        if not match:
+            return
+        logger, msg = match.groups()
+        # Overall success is separate from model completion (coalescing may fail).
+        if logger in (
+            "activitysim.core.tracing",
+            "activitysim.core.workflow.runner",
+            "activitysim.cli.run",
+        ):
+            if RUN_DONE.match(msg):
+                self.finished = not self.failed
+                self.observed = True
+            if (
+                "activitysim run encountered an unrecoverable error" in msg
+                or "all models until this error" in msg
+            ):
+                self.failed = True
+                self.finished = False
+        if logger == "activitysim.core.mp_tasks" and self.plan.multiprocess:
+            match = COMPLETED.fullmatch(msg.split(" (", 1)[0])
+            if match:
+                self.complete(*match.groups())
+            match = PROCESS_DONE.fullmatch(msg)
+            if match and match[1] in self.phase_by_worker:
+                phase = self.phase_by_worker[match[1]]
+                for model in phase.models:
+                    self.complete(match[1], model)
+            if PROCESS_FAILED.match(msg):
+                self.failed = True
+                self.finished = False
+            if msg.startswith(("start process ", "run_sub_simulations step ")):
+                self.observed = True
+        elif not self.plan.multiprocess and logger in (
+            "activitysim.core.pipeline",
+            "activitysim.core.workflow.runner",
+        ):
+            match = SINGLE_DONE.match(msg)
+            if match:
+                self.complete("MainProcess", match[1])
+            if msg.startswith("resume_after "):
+                checkpoint = msg.removeprefix("resume_after ")
+                if checkpoint in self.plan.models:
+                    self.observed = True
+                    self.resume_pending.discard("MainProcess")
+                    for model in self.plan.models[
+                        : self.plan.models.index(checkpoint) + 1
+                    ]:
+                        self.completed[model].add("MainProcess")
+            if "#run_model running step " in msg:
+                self.observed = True
+
+    def current_step_info(
+        self,
+    ) -> tuple[Optional[int], Optional[str], str, Optional[int], Optional[int]]:
+        """Return zero-based index, model, phase, satisfied workers, expected workers."""
+        if self.finished:
+            return None, None, "DONE", None, None
+        for idx, model in enumerate(self.plan.models):
+            phase = self.phase_by_model[model]
+            done = len(self.completed[model])
+            if done < len(phase.workers):
+                return idx, model, phase.name, done, len(phase.workers)
+        return None, None, "FINALIZING", None, None
+
+    @property
+    def status(self) -> str:
+        if self.failed:
+            return "failed"
+        if self.finished:
+            return "finished"
+        idx, model, _, _, _ = self.current_step_info()
+        if idx is None:
+            return "finalizing"
+        phase = self.phase_by_model[model]
+        if self.resume_pending.intersection(phase.workers):
+            return "resuming"
+        return "running" if self.observed else "waiting"
+
+
+class LogReader:
+    """Replay once, then read appended complete lines in bounded chunks.
+
+    Retain partial lines across ticks. Detect replacement/truncation, including
+    truncate-and-regrow when the previously read boundary has changed.
+    """
+
+    def __init__(self, path: Path, chunk_bytes: int = 256 * 1024):
+        if chunk_bytes <= 0:
+            raise ValueError("Log read chunk size must be positive")
+        self.path = Path(path)
+        self.chunk_bytes = chunk_bytes
+        self.reset()
+
+    def reset(self):
+        self.identity = None
+        self.offset = 0
+        self.pending = b""
+        self.boundary = b""
+
+    def lines(self, on_reset):
+        with self.path.open("rb") as stream:
+            stat = os.fstat(stream.fileno())
+            identity = (stat.st_dev, stat.st_ino)
+            stream.seek(max(0, self.offset - len(self.boundary)))
+            boundary = stream.read(len(self.boundary))
+            if self.identity is not None and (
+                identity != self.identity
+                or stat.st_size < self.offset
+                or boundary != self.boundary
+            ):
+                self.reset()
+                on_reset()
+            self.identity = identity
+            stream.seek(self.offset)
+            # Only consume the snapshot available at the start of this poll.
+            remaining = stat.st_size - self.offset
+            while remaining > 0:
+                chunk = stream.read(min(self.chunk_bytes, remaining))
+                if not chunk:
+                    break
+                self.offset += len(chunk)
+                remaining -= len(chunk)
+                self.boundary = (self.boundary + chunk)[-128:]
+                parts = (self.pending + chunk).split(b"\n")
+                self.pending = parts.pop()
+                for line in parts:
+                    yield line.decode("utf-8", errors="replace").rstrip("\r")
+
+
+class RunMonitor:
+    """Reload changed plans and replay logs so late plan creation loses no events."""
+
+    def __init__(self, log_path, run_list_path=None, chunk_bytes=256 * 1024):
+        self.reader = LogReader(Path(log_path), chunk_bytes)
+        self.plan_path = (
+            Path(run_list_path)
+            if run_list_path
+            else Path(log_path).with_name("run_list.txt")
+        )
+        self.plan_stamp = None
+        self.tracker = None
+        self.warning = None
+
+    def poll(self) -> None:
+        try:
+            stat = self.plan_path.stat()
+            stamp = (stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_size)
+            if stamp != self.plan_stamp:
+                plan = RunPlan.from_text(self.plan_path.read_text(encoding="utf-8"))
+                self.tracker = StepTracker(plan)
+                self.plan_stamp = stamp
+                self.reader.reset()
+            for line in self.reader.lines(self.tracker.reset):
+                self.tracker.update(line)
+            self.warning = None
+        except (OSError, ValueError) as exc:
+            self.warning = f"Progress unavailable: {exc}. Waiting for readable, valid run_list.txt and log files."
+            # Never retain DONE or guessed progress while an artifact is invalid.
+            self.tracker = None
+            self.plan_stamp = None
 
 
 def format_now() -> str:
@@ -146,301 +415,114 @@ def bytes_to_gb(n_bytes: int) -> float:
     return n_bytes / (1024**3)
 
 
-def _read_log_tail(log_path: str, max_read_bytes: int) -> str:
-    """Read the last max_read_bytes of the log (UTF-8 decode, ignore errors)."""
-    try:
-        size = os.path.getsize(log_path)
-        start = max(0, size - max_read_bytes)
-        with open(log_path, "rb") as f:  # read-only, avoids writer contention
-            if start:
-                f.seek(start)
-            chunk = f.read()
-        return chunk.decode("utf-8", errors="ignore") if chunk else ""
-    except (FileNotFoundError, PermissionError, OSError):
-        return ""
-
-
-# --- State and inference from log -------------------------------------------
-
-
-class StepTracker:
-    """
-    Tracks step completion strictly by sequence.
-    For mp_households, a step completes only after all known workers complete it.
-    """
-
-    def __init__(self) -> None:
-        # Index of last completed step in STEP_NAMES (-1 means nothing completed yet)
-        self.last_completed_idx: int = -1
-        # Set of worker ids (ints) seen via "start process mp_households_N"
-        self.active_workers: Set[int] = set()
-        # Set of worker ids (ints) seen via "start process mp_accessibility_N"
-        self.active_access_workers: Set[int] = set()
-        # For accessibility, which workers have completed the step
-        self.access_completed_workers: Dict[str, Set[int]] = {}
-        # For the current households step, which workers have completed
-        self.hh_completed_workers: Dict[str, Set[int]] = {}
-        # Keep a cache of seen completion tokens to avoid re-processing duplicates
-        # token: tuple('init/sum' or 'hh', phase_id or worker_id, step_name)
-        self.seen_completions: Set[Tuple[str, str, str]] = set()
-        # Optional: track last observed/announced phase
-        self.last_observed_phase: Optional[str] = None
-
-    def _phase_of_index(self, idx: int) -> Optional[str]:
-        if 0 <= idx < len(STEP_NAMES):
-            return STEP_TO_PHASE[STEP_NAMES[idx]]
-        return None
-
-    def update_from_tail(self, text: str) -> None:
-        """Parse the tail text and update internal state (workers and completions)."""
-        if not text:
-            return
-
-        # 1) Record any new workers that started (used to know how many must complete a household step)
-        for m in PAT_START_WORKER.finditer(text):
-            wid = int(m.group(1))
-            self.active_workers.add(wid)
-
-        for m in PAT_START_ACCESS_WORKER.finditer(text):
-            wid = int(m.group(1))
-            self.active_access_workers.add(wid)
-
-        # 2) Record phase runs (optional, just for UX)
-        for m in PAT_RUN_PHASE.finditer(text):
-            self.last_observed_phase = m.group(1)
-
-        # 3) Record completions (init/summarize)
-        for m in PAT_COMPLETED_INIT_SUM.finditer(text):
-            step_name = m.group(1)
-            token = ("init/sum", "single", step_name)
-            if token in self.seen_completions:
-                continue
-            self.seen_completions.add(token)
-            # We only mark completion during resolution below (respecting order)
-
-        # 3b) Record completions (accessibility per-worker)
-        for m in PAT_COMPLETED_ACCESS.finditer(text):
-            wid = m.group(1)
-            step_name = m.group(2)
-            token = ("access", wid, step_name)
-            if token in self.seen_completions:
-                continue
-            self.seen_completions.add(token)
-            self.access_completed_workers.setdefault(step_name, set()).add(int(wid))
-
-        # 4) Record completions (households per-worker)
-        for m in PAT_COMPLETED_HH.finditer(text):
-            wid = m.group(1)
-            step_name = m.group(2)
-            token = ("hh", wid, step_name)
-            if token in self.seen_completions:
-                continue
-            self.seen_completions.add(token)
-            # Cache worker completion for this step
-            self.hh_completed_workers.setdefault(step_name, set()).add(int(wid))
-
-        # 5) Resolve sequence strictly, possibly advancing multiple steps if evidence exists
-        advanced = True
-        while advanced:
-            advanced = False
-            next_idx = self.last_completed_idx + 1
-            if next_idx >= len(STEP_NAMES):
-                break
-
-            next_step = STEP_NAMES[next_idx]
-            phase = STEP_TO_PHASE[next_step]
-
-            if phase in ("mp_initialize", "mp_summarize"):
-                # Completion is true if we have a completion token for this step
-                token = ("init/sum", "single", next_step)
-                if token in self.seen_completions:
-                    self.last_completed_idx = next_idx
-                    advanced = True
-                    # Clean any stale household worker sets for previous steps
-                    self.hh_completed_workers.pop(next_step, None)
-                    continue
-                # not completed yet -> stop resolving
-                break
-
-            if phase == "mp_accessibility":
-                completed_workers = self.access_completed_workers.get(next_step, set())
-                if self.active_access_workers and completed_workers >= self.active_access_workers:
-                    self.last_completed_idx = next_idx
-                    advanced = True
-                    self.access_completed_workers.pop(next_step, None)
-                    continue
-                break
-
-            # mp_households: require all active workers to complete the step
-            if phase == "mp_households":
-                completed_workers = self.hh_completed_workers.get(next_step, set())
-                # If we don't yet know active workers, we can't mark complete.
-                # We'll wait until starts are seen; still show running status with ?/? below.
-                if self.active_workers and completed_workers >= self.active_workers:
-                    # step completed by all workers
-                    self.last_completed_idx = next_idx
-                    advanced = True
-                    # prepare for next step: keep hh_completed_workers but this step is done
-                    # (we can drop its set to save memory)
-                    self.hh_completed_workers.pop(next_step, None)
-                    continue
-                # not completed yet -> stop resolving
-                break
-
-    def current_step_info(
-        self,
-    ) -> Tuple[Optional[int], Optional[str], str, Optional[int], Optional[int]]:
-        """
-        Returns:
-          - current_step_idx (None if all done),
-          - current_step_name (None if all done),
-          - phase string ("mp_initialize"|"mp_households"|"mp_summarize"| "DONE"),
-          - done_workers (for household phase, else None),
-          - total_workers (for household phase, else None)
-        """
-        idx = self.last_completed_idx + 1
-        if idx >= len(STEP_NAMES):
-            return None, None, "DONE", None, None
-
-        step_name = STEP_NAMES[idx]
-        phase = STEP_TO_PHASE[step_name]
-
-        if phase == "mp_households":
-            done = len(self.hh_completed_workers.get(step_name, set()))
-            total = len(self.active_workers) if self.active_workers else None
-            return idx, step_name, phase, done, total
-
-        return idx, step_name, phase, None, None
-
-
-# --- Monitor loop ------------------------------------------------------------
-
-
 def monitor(
-    interval: float = 0.5,
-    csv_path: Optional[str] = None,
-    log_path: Optional[str] = None,
-    tail_bytes: int = 256 * 1024,  # bigger default to improve catch-up robustness
-    parent_pid: Optional[int] = None,
-    delay_seconds: float = 0,
-) -> None:
-    # Delay start if requested
+    interval=0.5,
+    csv_path=None,
+    log_path=None,
+    tail_bytes=256 * 1024,
+    parent_pid=None,
+    delay_seconds=0,
+    run_list_path=None,
+):
+    """Sample resources; --tail-bytes now controls read chunks, not retained history."""
     if delay_seconds > 0:
         print(f"Delaying sys_monitor start for {delay_seconds} seconds...")
         time.sleep(delay_seconds)
-    
-    # Warm up psutil's CPU measurement for better first reading
     psutil.cpu_percent(interval=None)
-
-    csv_file = None
-    tracker = StepTracker()
-    parent_process = None
-    log_path_warned_missing = False
-    
-    # If parent PID provided, get parent process object
+    progress = RunMonitor(log_path, run_list_path, tail_bytes) if log_path else None
+    parent = None
     if parent_pid is not None:
         try:
-            parent_process = psutil.Process(parent_pid)
-            print(f"Monitoring parent process PID {parent_pid} ({parent_process.name()})")
-        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-            print(f"Warning: Cannot access parent process {parent_pid}: {e}")
-            print("Continuing without parent process monitoring.")
-            parent_process = None
-
+            parent = psutil.Process(parent_pid)
+            print(f"Monitoring parent process PID {parent_pid} ({parent.name()})")
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as exc:
+            print(f"Warning: Cannot access parent process {parent_pid}: {exc}")
+    csv_file = None
+    previous_warning = None
     try:
         if csv_path:
-            # Create file and header if new, else append
-            file_exists = False
-            try:
-                with open(csv_path, "r", encoding="utf-8"):
-                    file_exists = True
-            except FileNotFoundError:
-                file_exists = False
-
+            has_content = Path(csv_path).exists() and Path(csv_path).stat().st_size > 0
             csv_file = open(csv_path, "a", encoding="utf-8", newline="")
-            if not file_exists:
-                csv_file.write(
-                    "timestamp,cpu_percent,memory_used_gb,memory_available_gb,available_memory_pct,phase,step_index,step_name,status,workers_done,workers_total\n"
+            writer = csv.writer(csv_file)
+            if not has_content:
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "cpu_percent",
+                        "memory_used_gb",
+                        "memory_available_gb",
+                        "available_memory_pct",
+                        "phase",
+                        "step_index",
+                        "step_name",
+                        "status",
+                        "workers_done",
+                        "workers_total",
+                    ]
+                )
+        print("Press Ctrl+C to stop.")
+        while True:
+            ts = format_now()
+            cpu = psutil.cpu_percent(interval=None)
+            vm = psutil.virtual_memory()
+            used_gb = bytes_to_gb(vm.total - vm.available)
+            avail_gb = bytes_to_gb(vm.available)
+            avail_pct = vm.available / vm.total * 100 if vm.total else 0.0
+            tracker = None
+            if progress:
+                progress.poll()
+                if progress.warning and progress.warning != previous_warning:
+                    print(progress.warning)
+                previous_warning = progress.warning
+                tracker = progress.tracker
+            idx, step, phase, done, total = (
+                tracker.current_step_info()
+                if tracker
+                else (None, None, "UNKNOWN", None, None)
+            )
+            status = tracker.status if tracker else "unknown"
+            count = len(tracker.plan.models) if tracker else None
+            step_progress = (
+                f"{idx + 1 if idx is not None else count}/{count}" if tracker else "?/?"
+            )
+            workers = f" (workers: {done}/{total})" if total is not None else ""
+            print(
+                f"{ts} | CPU: {cpu:5.1f}% | Used: {used_gb:6.2f} GB | "
+                f"Available: {avail_gb:6.2f} GB ({avail_pct:5.1f}%) | "
+                f"Phase: {phase} | Step: {step_progress} | "
+                f"{step or phase}{workers} ({status})"
+            )
+            if csv_file:
+                writer.writerow(
+                    [
+                        ts,
+                        f"{cpu:.1f}",
+                        f"{used_gb:.2f}",
+                        f"{avail_gb:.2f}",
+                        f"{avail_pct:.1f}",
+                        phase,
+                        idx + 1 if idx is not None else "",
+                        step or "",
+                        status,
+                        done if done is not None else "",
+                        total if total is not None else "",
+                    ]
                 )
                 csv_file.flush()
-
-        print("Press Ctrl+C to stop.")
-        total_steps = len(STEP_NAMES)
-
-        while True:
-            # Check if parent process is still alive
-            if parent_process is not None:
+            # Consume final log records before stopping; exit never implies success.
+            if parent is not None:
                 try:
-                    if not parent_process.is_running():
-                        print(f"\nParent process {parent_pid} has exited. Stopping monitor.")
+                    if not parent.is_running():
+                        print(
+                            f"Parent process {parent_pid} has exited. Stopping monitor ({status})."
+                        )
                         break
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    print(f"\nParent process {parent_pid} no longer accessible. Stopping monitor.")
-                    break
-            ts = format_now()
-            cpu = psutil.cpu_percent(interval=None)  # non-blocking snapshot
-
-            vm = psutil.virtual_memory()
-            total_gb = bytes_to_gb(vm.total)
-            avail_gb = bytes_to_gb(vm.available)
-            used_gb = total_gb - avail_gb
-            avail_pct = (vm.available / vm.total) * 100 if vm.total else 0.0
-
-            # Update tracker from log (if provided)
-            if log_path:
-                if not os.path.exists(log_path) and not log_path_warned_missing:
                     print(
-                        f"Warning: Log file not found at '{log_path}'. "
-                        "Phase/step tracking will stay at the initial step until a valid log path is provided."
+                        f"Parent process {parent_pid} is unavailable. Stopping monitor ({status})."
                     )
-                    log_path_warned_missing = True
-                text = _read_log_tail(log_path, max_read_bytes=tail_bytes)
-                tracker.update_from_tail(text)
-
-            curr_idx, curr_step, phase, done_workers, total_workers = (
-                tracker.current_step_info()
-            )
-
-            # Build status string
-            if phase == "DONE":
-                status = "finished"
-                display_phase = "DONE"
-                step_progress = f"{total_steps}/{total_steps}"
-                step_display = "DONE"
-                workers_display = ""
-            else:
-                status = "running"
-                display_phase = phase
-                step_progress = f"{(curr_idx or 0) + 1}/{total_steps}"
-                if phase == "mp_households":
-                    if total_workers is None:
-                        workers_display = " (workers: ?/?)"
-                    else:
-                        workers_display = f" (workers: {done_workers}/{total_workers})"
-                else:
-                    workers_display = ""
-                step_display = f"{curr_step}{workers_display} ({status})"
-
-            line = (
-                f"{ts} | CPU: {cpu:5.1f}% | "
-                f"Used: {used_gb:6.2f} GB | "
-                f"Available: {avail_gb:6.2f} GB ({avail_pct:5.1f}%) | "
-                f"Phase: {display_phase} | Step: {step_progress} | {step_display}"
-            )
-            print(line)
-
-            if csv_file:
-                csv_file.write(
-                    f"{ts},{cpu:.1f},{used_gb:.2f},{avail_gb:.2f},{avail_pct:.1f},"
-                    f"{display_phase},{'' if curr_idx is None else curr_idx+1},{'' if curr_step is None else curr_step},"
-                    f"{status if phase != 'DONE' else 'finished'},"
-                    f"{'' if done_workers is None else done_workers},"
-                    f"{'' if total_workers is None else total_workers}\n"
-                )
-                csv_file.flush()
-
+                    break
             time.sleep(interval)
-
     except KeyboardInterrupt:
         print("\nStopped by user.")
     finally:
@@ -448,22 +530,29 @@ def monitor(
             csv_file.close()
 
 
-# --- CLI ---------------------------------------------------------------------
-
-
-def positive_float(value: str) -> float:
+def positive_float(value):
     try:
-        v = float(value)
-    except ValueError:
-        raise argparse.ArgumentTypeError("Interval must be a number.")
-    if v <= 0:
-        raise argparse.ArgumentTypeError("Interval must be > 0.")
-    return v
+        number = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Value must be a number") from exc
+    if not 0 < number < float("inf"):
+        raise argparse.ArgumentTypeError("Value must be finite and > 0")
+    return number
 
 
-def main() -> None:
+def positive_int(value):
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Value must be an integer") from exc
+    if number <= 0:
+        raise argparse.ArgumentTypeError("Value must be > 0")
+    return number
+
+
+def main():
     parser = argparse.ArgumentParser(
-        description="Track CPU/memory usage and current ActivitySim step (phase-aware, waits for all workers)."
+        description="Track CPU/memory and ActivitySim progress from the resolved run plan and log."
     )
     parser.add_argument(
         "--interval",
@@ -473,37 +562,30 @@ def main() -> None:
         help="Sampling interval in seconds (default: 0.5)",
     )
     parser.add_argument(
-        "--csv",
-        type=str,
-        default="../output/log/sys_usage.csv",
-        help="Optional path to CSV file for logging (e.g., sys_usage.csv)",
+        "--csv", default="../output/log/sys_usage.csv", help="CSV output path"
     )
     parser.add_argument(
         "--log",
-        type=str,
         default="../output/log/activitysim.log",
-        help="Optional path to an ActivitySim log file to infer the current step.",
+        help="ActivitySim main log path",
+    )
+    parser.add_argument(
+        "--run-list", help="Resolved run_list.txt path (default: alongside --log)"
     )
     parser.add_argument(
         "--tail-bytes",
-        type=int,
+        type=positive_int,
         default=256 * 1024,
-        help="Number of bytes to tail from the log each tick (default: 262144). Increase if starting mid-run.",
+        help="Read chunk size in bytes (default: 262144); all existing log history is replayed",
     )
-    parser.add_argument(
-        "--parent-pid",
-        type=int,
-        default=None,
-        help="Parent process PID to monitor. Monitor will exit if parent process dies.",
-    )
+    parser.add_argument("--parent-pid", type=int, help="Stop when this process exits")
     parser.add_argument(
         "--delay",
         type=positive_float,
         default=0,
-        help="Delay in seconds before starting monitoring (default: 0)",
+        help="Delay before monitoring, in seconds",
     )
     args = parser.parse_args()
-
     monitor(
         interval=args.interval,
         csv_path=args.csv,
@@ -511,6 +593,7 @@ def main() -> None:
         tail_bytes=args.tail_bytes,
         parent_pid=args.parent_pid,
         delay_seconds=args.delay,
+        run_list_path=args.run_list,
     )
 
 

@@ -1,0 +1,37 @@
+resume_after: school_location
+multiprocess: True
+models:
+  - initialize_landuse
+  - school_location
+  - constraint_new_access
+  - write_tables
+
+multiprocess_steps:
+  step: prepare
+    name: prepare
+    num_processes: 1
+    models:
+       - initialize_landuse
+  step: choices_renamed
+    name: choices_renamed
+    num_processes: 2
+    models:
+       - school_location
+       - constraint_new_access
+    resume_after: school_location
+  step: export
+    name: export
+    num_processes: 1
+    models:
+       - write_tables
+
+breadcrumbs:
+  step: prepare
+     name prepare
+     simulate True
+     completed ['prepare']
+  step: choices_renamed
+     name choices_renamed
+     simulate None
+     completed ['choices_renamed_0', 'choices_renamed_1']
+     coalesce None
