@@ -47,6 +47,7 @@ STEP_NAMES = [
     ### mp_households step
     "school_location",
     "workplace_location",
+    "constraint_school_bus_availability",
     "auto_ownership_simulate",
     "free_parking",
     "cdap_simulate",
