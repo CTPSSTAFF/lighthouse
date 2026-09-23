@@ -212,7 +212,7 @@ def main():
         command += ["-c", str(config)]
     command += ["-d", str(data), "-d", str(source), "-o", str(output)]
     if (ROOT / "extensions").is_dir():
-        command += ["--ext", str(ROOT / "extensions")]
+        command += ["--ext", "extensions"]
     env = os.environ.copy()
     for name in [
         "OMP_NUM_THREADS",
