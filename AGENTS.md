@@ -12,8 +12,7 @@ repository root. Edit `AGENTS.md` as the source of truth, then run
 - Read `README.md` and the relevant code and configuration before making changes. Follow existing
   conventions and verify assumptions against the current checkout.
 - Use Python 3.10 and uv as specified in `pyproject.toml`. The documented setup is `uv sync --locked`.
-  Check `[tool.uv.sources]` first: this checkout references editable sibling ActivitySim and Sharrow
-  repositories. Report missing prerequisites; do not silently replace sources or regenerate the lock.
+  Check the dependency sources in `pyproject.toml` before changing the environment. Report missing prerequisites; do not silently replace sources or regenerate the lock.
 
 ## Working practices
 
