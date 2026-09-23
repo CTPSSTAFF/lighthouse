@@ -5,5 +5,3 @@ coef_school_k12,0.2,F
 coef_dist_within_radius,-1.5,F
 coef_areatype_urban,-0.8,F
 coef_areatype_rural,1,F
-coef_zero_auto,0.25,F
-coef_fewer_autos_than_workers,0.15,F
