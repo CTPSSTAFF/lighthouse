@@ -45,11 +45,15 @@ STEP_NAMES = [
     ### mp_accessibility step
     "compute_accessibility",
     ### mp_households step
+    "work_from_home",
     "school_location",
     "workplace_location",
     "auto_ownership_simulate",
     "free_parking",
+    "telecommute_frequency",
     "cdap_simulate",
+    "telework_arrangement",
+    "telework_duration",
     "mandatory_tour_frequency",
     "mandatory_tour_scheduling",
     "non_mandatory_tour_frequency",
