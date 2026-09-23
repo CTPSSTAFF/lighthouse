@@ -1,0 +1,94 @@
+---
+name: Model tests
+
+"on":
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: '0.12.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Check test infrastructure formatting
+        run: |
+          uv run --locked ruff check scripts/model_ci.py tests
+          uv run --locked ruff format --check scripts/model_ci.py tests
+      - name: Run contract tests
+        run: uv run --locked pytest tests -q --junitxml=test-results.xml
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: contract-results
+          path: test-results.xml
+          retention-days: 14
+
+  model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: '0.12.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Run full model sequence for fixed households
+        run: uv run --locked python scripts/model_ci.py
+      - name: Save diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: model-report
+          path: |
+            model/output_ci/report/
+            model/output_ci/*.log
+          retention-days: 14
+      - name: Verify locked inputs were not modified
+        run: git diff --exit-code -- pyproject.toml uv.lock model/configs model/configs_mp model/data
+
+  broader:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: larger
+            args: --households 10000
+          - name: single-process
+            args: --single-process
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: '0.12.13'
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked python scripts/model_ci.py ${{ matrix.args }}
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: model-report-${{ matrix.name }}
+          path: |
+            model/output_ci/report/
+            model/output_ci/*.log
+          retention-days: 14
