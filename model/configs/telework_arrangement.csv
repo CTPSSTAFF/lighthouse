@@ -1,6 +1,6 @@
 Label,Description,Expression,has_in_home_work_activity,no_in_home_work_activity
 util_acs,alternative specific constant,@1,coef_acs_has_in_home_work_activity,
-util_part_time_worker,partime worker,ptype==2,coef_parttime_has_in_home,
+util_part_time_worker,part-time worker,ptype==2,coef_parttime_has_in_home,
 util_univ_student,university student,ptype==3,coef_univ_student_has_in_home,
 util_driving_age_student,driving age student,ptype==6,-999,
 util_has_preschool_at_home,has preschool children at home on the day,has_preschool_kid_at_home,coef_has_preschool_at_home_has_in_home,
@@ -19,4 +19,4 @@ util_work_from_home_cdap_N,work from home and cdap non-mandatory,"(work_from_hom
 util_work_from_home_cdap_H,work from home and cdap home,"(work_from_home==True) & (cdap_activity==""H"")",coef_work_from_home_cdap_H,
 # industry,,,,
 util_industry_business_srv,srv industry_business,@df.naics_code==54,coef_industry_business_srv,
-util_cdap_N_non_mandatory_accessibility,CDAP N and Disaggreage non-mandatory accessibility at home location,"(cdap_activity==""N"")*auPkRetail",coef_cdap_N_non_mandatory_accessibility,
+util_cdap_N_non_mandatory_accessibility,CDAP N and Disaggregate non-mandatory accessibility at home location,"(cdap_activity==""N"")*auPkRetail",coef_cdap_N_non_mandatory_accessibility,
