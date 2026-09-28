@@ -1,5 +1,6 @@
 Description,Target,Expression
 #,, annotate persons table after import
+Preserve source student status for fixed schedule eligibility,fixed_schedule_source_pstudent,persons.pstudent
 age_16_to_19,age_16_to_19,"persons.age.between(16, 19)"
 age_16_p,age_16_p,persons.age >= 16
 adult,adult,persons.age >= 18

@@ -180,6 +180,7 @@ models:
   - initialize_households
   - compute_accessibility
   - work_from_home
+  - constraint_fixed_work_schedule
   - constraint_can_travel_alone
   - constraint_walk_ability
   - school_location
