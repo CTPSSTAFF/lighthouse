@@ -1,6 +1,8 @@
 # Proposed constraint: works a fixed schedule
 
-Status: revised plan for review. No model behavior or configuration has been changed.
+Status: attribute-only prototype implemented on `feature/fixed-work-schedule` following the user
+implementation instruction. See [implementation and validation](fixed-work-schedule.md). The
+scheduling integration below remains deferred; numerical parameters are unvalidated assumptions.
 
 ## Confirmed component contract
 
@@ -52,14 +54,15 @@ person as a worker. Validate missing or conflicting eligibility fields explicitl
 silently treating unknown student status as nonstudent. This preservation is local to the new
 component's eligibility and does not require redesigning existing student models.
 
-Proposed output representation remains a nullable Boolean plus a status/source field:
+Implemented output representation is a nullable Boolean plus a status/source field:
 
-- Eligible and assigned: true or false, with assignment source marked as prototype industry draw.
+- Eligible and assigned: true or false, with assignment source marked as prototype logit.
 - Known excluded: null and not-applicable status, with student/nonworker counts reported.
-- Unresolved input: unknown status, distinct from both not-applicable and an assigned false result.
+- Unresolved required input: an error with diagnostics, never an assigned false result.
 
-Exact output coding and the policy for unresolved input remain implementation contract details for
-review. The attribute-only release has **no downstream scheduling effect**.
+The prototype implements nullable Boolean status and fails on unresolved required inputs with
+actionable diagnostics; it does not assign an unknown case a flexible result. The attribute-only
+release has **no downstream scheduling effect**.
 
 ## Binary logit assignment
 
@@ -80,7 +83,7 @@ intercept with no additional common intercept, avoiding redundant parameters. Ke
 income transformation constants in configuration. Export utilities/probabilities and assignment
 summaries by industry and income band for review.
 
-Proposed prototype income specification, not yet approved or estimated:
+Implemented prototype income specification, not estimated:
 
 - `y = max(person_income_proxy, 0)` in annual input dollars.
 - `x_income = ln((1 + y / 50000) / 2)`.
@@ -90,7 +93,7 @@ Proposed prototype income specification, not yet approved or estimated:
 At an income of 50,000, the income term is zero and the earlier industry probability is recovered.
 Lower income raises fixed-schedule probability; higher income lowers it. The logarithm keeps zero
 income defined and moderates the high-income tail. These constants and the slope are explicit
-prototype assumptions for review, not empirical results. The industry probabilities now describe a
+prototype assumptions, not empirical results. The industry probabilities now describe a
 reference-income person, not unconditional industry averages. The previous 59.5% industry-only
 aggregate therefore does not describe the new model and is not a calibration target.
 
@@ -115,8 +118,8 @@ is broken. Missing income must be reported rather than treated as zero. There ar
 people with zero household income in the inspected inputs and no negative-income eligible cases.
 Propose flooring future negative proxy incomes at zero, with counts reported; this is a modeling
 assumption, not correction of the source data. Preserve raw and transformed values for diagnostics.
-The person-record denominator is confirmed. Negative/missing-income handling remains proposed for
-review.
+The person-record denominator is confirmed. The prototype floors negative incomes at zero for
+utility and fails on missing income; raw proxy values remain available for diagnostics.
 
 The proxy assigns equal income to employed members of a household and can include household nonlabor
 income. It does not estimate their separate wages. When individual income arrives, retain its
@@ -128,7 +131,8 @@ unchanged.
 Validate industry mapping and coefficient coverage; missing, malformed, or unmapped codes must not
 silently become the reference industry or an assigned false result. The
 [industry probability proposal](fixed-work-schedule-probabilities.md) supplies reference-income
-probabilities and logit conversion details; none of its numerical parameters are approved yet.
+probabilities and logit conversion details; its numerical parameters are now used for the authorized
+prototype, not validated production use.
 
 Keep status stable across transportation scenarios with the same people, industry/income inputs,
 configuration, and seed. No transport skims, costs, logsums, or simulated-workplace predictors enter
@@ -265,8 +269,9 @@ For later scheduling integration:
 ## Remaining review details
 
 - Prototype industry intercepts, income slope/transformation, and industry grouping; numerical
-  assumptions are proposed in the linked review document but are not approved or validated.
-- Nullable output/status coding and explicit handling of unknown eligibility or industry.
+  assumptions are implemented for the prototype but are not empirically validated.
+- Output coding and invalid-input behavior are implemented as documented; revisit only if future
+  survey integration requires a different contract.
 - Later only: identical hours on all workdays versus a repeating weekly pattern, time resolution,
   allowed arrival windows, supported work patterns, and run-level handling of unexpected
   infeasibility.

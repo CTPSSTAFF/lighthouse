@@ -26,6 +26,11 @@ uv run --project .. activitysim run -c configs_mp -c configs -d data -o ../outpu
 See [Monitoring a model run](docs/sys-monitor.md) for CPU/memory sampling and progress tracking from
 ActivitySim run plans and logs.
 
+## Constraint components
+
+See [Fixed work schedule](docs/fixed-work-schedule.md) for the industry/income logit prototype,
+configuration, outputs, and validation. Actual work-hour scheduling is deferred.
+
 ## Contents
 
 - `model`: ActivitySim inputs (configs, data) for the lighthouse model. Currently `model/data`

@@ -1,6 +1,7 @@
 # Proposed industry anchors for the fixed-work-schedule logit
 
-Status: proposal for user review, not approved or enabled. All probabilities below are invented
+Status: implemented for the user-authorized attribute prototype; see
+[implementation and validation](fixed-work-schedule.md). All probabilities below are invented
 prototype assumptions, not survey estimates or validated parameters. Census sources support the
 industry meanings only, not these probabilities or the behavioral reasoning.
 
@@ -105,7 +106,8 @@ large input populations give them substantial influence.
 
 The user has authorized a binary logit with personal income, temporarily proxied by household income
 per worker. The industry probabilities above are now proposed anchors at annual income 50,000, not
-unconditional industry shares. No numerical assumptions are approved or estimated yet.
+unconditional industry shares. These numerical assumptions are implemented for the prototype, not
+estimated or validated.
 
 Set nonfixed utility to zero and fixed utility to:
 
@@ -128,7 +130,7 @@ corresponding values for 40%, 35%, 30%, and 25% are -0.405, -0.619, -0.847, and 
 full-precision values from the approved probabilities in implementation.
 
 The earlier 59.5% aggregate applies only with a zero income effect. Recompute expected shares from
-individual logit probabilities when the proxy and parameters are approved. For income sensitivity,
+individual logit probabilities for the implemented proxy and parameters. For income sensitivity,
 compare slopes 0, -0.5, and -1.0 as explicit prototype scenarios, not confidence bounds. See the
 [component plan](fixed-work-schedule-plan.md) for denominator inconsistencies, the confirmed
 person-based worker count, income provenance, and missing-data handling.
@@ -154,5 +156,5 @@ subsectors. This verifies labels; it does not establish the vintage of the model
 [2018 ACS PUMS documentation](https://www2.census.gov/programs-surveys/acs/tech_docs/pums/ACS2018_PUMS_README.pdf)
 explains unemployment pseudo-codes and nonstandard letter-coded NAICS equivalents.
 
-No data, model configuration, or executable behavior has been changed. Once reviewed, approved
-probabilities can be transferred to the component's configuration with assumption labels preserved.
+The component configuration now contains these industry anchors as logit intercepts, with assumption
+labels preserved. Raw population inputs are unchanged. Actual work-hour scheduling is deferred.

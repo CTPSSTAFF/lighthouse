@@ -48,9 +48,9 @@ def population(n=8):
     return persons, households
 
 
-def run_assignment(persons, households, output, explicit=False):
+def run_assignment(persons, households, output, explicit=False, configs=CONFIGS):
     state = workflow.State.make_default(
-        configs_dir=CONFIGS,
+        configs_dir=configs,
         data_dir=ROOT / "model/data",
         output_dir=Path(output),
         settings={
@@ -220,3 +220,49 @@ def test_explicit_error_terms(tmp_path):
     result = run_assignment(people, households, tmp_path, explicit=True)
     assert result.works_fixed_schedule.notna().all()
     np.testing.assert_allclose(result.fixed_schedule_probability, 0.5)
+
+
+def test_zero_income_coefficient_and_alternative_order(tmp_path):
+    # Alternative position must come from its name, not an assumed Boolean index.
+    override = tmp_path / "configs"
+    override.mkdir()
+    spec = pd.read_csv(CONFIGS / "constraint_fixed_work_schedule.csv", comment="#")
+    spec[["Label", "Description", "Expression", "other", "fixed"]].to_csv(
+        override / "constraint_fixed_work_schedule.csv", index=False
+    )
+    coeff = pd.read_csv(
+        CONFIGS / "constraint_fixed_work_schedule_coefficients.csv", comment="#"
+    )
+    coeff.loc[coeff.coefficient_name.eq("coef_income"), "value"] = 0
+    coeff.to_csv(
+        override / "constraint_fixed_work_schedule_coefficients.csv", index=False
+    )
+    people, households = population(10000)
+    people.naics_code = 61
+    result = run_assignment(
+        people,
+        households.assign(income=0),
+        tmp_path / "zero",
+        configs=[override, CONFIGS],
+    )
+    np.testing.assert_allclose(result.fixed_schedule_probability, 0.8)
+    assert abs(result.works_fixed_schedule.mean() - 0.8) < 0.02
+    higher = run_assignment(
+        people,
+        households.assign(income=1000000),
+        tmp_path / "million",
+        configs=[override, CONFIGS],
+    )
+    pd.testing.assert_series_equal(
+        result.works_fixed_schedule, higher.works_fixed_schedule
+    )
+
+
+def test_duplicate_person_and_household_ids():
+    people, households = population()
+    with pytest.raises(ValueError, match="persons requires unique"):
+        prepare_choosers(pd.concat([people, people.iloc[:1]]), households, settings())
+    with pytest.raises(ValueError, match="households requires unique"):
+        prepare_choosers(
+            people, pd.concat([households, households.iloc[:1]]), settings()
+        )
