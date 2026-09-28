@@ -6,9 +6,10 @@ using a binary logit with industry intercepts and an income term. It is enabled 
 students are excluded, including students with jobs whose source status is later recoded.
 
 This release assigns an attribute only. It does not draw work hours, reserve time windows, change
-tour/trip scheduling, or yet report infeasible schedules. Those consumers remain deferred in the
-[component plan](fixed-work-schedule-plan.md). Parameters are explicitly labeled prototype
-assumptions, not survey estimates. Survey estimation exports/overrides are not implemented.
+tour/trip scheduling, or yet report infeasible schedules. Those consumers remain deferred; the
+[scheduling integration plan](fixed-work-scheduling-plan.md) proposes their design. Parameters are
+explicitly labeled prototype assumptions, not survey estimates. Survey estimation exports/overrides
+are not implemented.
 
 ## Inputs and utility
 
