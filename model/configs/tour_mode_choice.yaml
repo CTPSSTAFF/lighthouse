@@ -24,67 +24,82 @@ NESTS:
       alternatives:
        - WALK_TRANSIT
        - DRIVE_TRANSIT
-    - RIDEHAIL
+    - RIDESOURCE
 
 CONSTANTS:
-  costPerMile: 18.29
+  costPerMile: 24.4
   costShareSr2: 1.75
   costShareSr3: 2.50
   waitThresh: 10.00
+  # TODO: verify whether walkThresh is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   walkThresh: 1.50
   shortWalk: 0.333
+  # TODO: verify whether longWalk is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   longWalk: 0.667
   walkSpeed: 3.00
+  # TODO: verify whether bikeThresh is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   bikeThresh: 6.00
   bikeSpeed: 12.00
-  maxCbdAreaTypeThresh: 2
+  # TODO: verify whether indivTour is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   indivTour: 1.00000
+  # TODO: verify whether upperEV is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   upperEV: 6
+  # TODO: verify whether upperAM is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   upperAM: 9
+  # TODO: verify whether upperMD is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   upperMD: 15
+  # TODO: verify whether upperPM is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   upperPM: 19
-  TNC_single_baseFare: 2.20
-  TNC_single_costPerMile: 1.33
-  TNC_single_costPerMinute: 0.24
-  TNC_single_costMinimum: 7.20
-  TNC_single_waitTime_mean: 
-    1: 3.0
-    2: 6.3
-    3: 8.4
-    4: 8.5
-    5: 10.3
-  TNC_single_waitTime_sd: 
+  TNC_waitTime_mean: 
+    1: 5.0
+    2: 5.0
+    3: 10.0
+    4: 30.0
+    5: 60.0
+    6: 90.0
+  TNC_waitTime_sd: 
     1: 0
     2: 0
     3: 0
     4: 0
     5: 0
+    6: 0
   min_waitTime: 0
   max_waitTime: 50
   ivt_cost_multiplier: 0.6
+  # TODO: verify whether ivt_lrt_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   ivt_lrt_multiplier: 0.9
+  # TODO: verify whether ivt_ferry_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   ivt_ferry_multiplier: 0.8
+  # TODO: verify whether ivt_exp_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   ivt_exp_multiplier: 1
+  # TODO: verify whether ivt_hvy_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   ivt_hvy_multiplier: 0.8
+  # TODO: verify whether ivt_com_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   ivt_com_multiplier: 0.7
   walktimeshort_multiplier: 2
+  # TODO: verify whether walktimelong_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   walktimelong_multiplier: 10
   biketimeshort_multiplier: 4
+  # TODO: verify whether biketimelong_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   biketimelong_multiplier: 20
   short_i_wait_multiplier: 2
   long_i_wait_multiplier: 1
+  # TODO: verify whether wacc_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   wacc_multiplier: 2
+  # TODO: verify whether wegr_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   wegr_multiplier: 2
   waux_multiplier: 2
   dtim_multiplier: 2
   xwait_multiplier: 2
   dacc_ratio: 0
   xfers_wlk_multiplier: 10
+  # TODO: verify whether xfers_drv_multiplier is still needed by tour_mode_choice.csv; update the spec or remove this constant if it is truly dead
   xfers_drv_multiplier: 20
   drvtrn_distpen_0_multiplier: 270
   drvtrn_distpen_max: 15
   density_index_multiplier: -0.2
-  ridehail_wait_time_multiplier: 1.5
+  ridesource_wait_time_multiplier: 1.5
 
 preprocessor:
   SPEC: tour_mode_choice_annotate_tours
