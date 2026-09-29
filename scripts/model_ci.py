@@ -182,11 +182,104 @@ def advisory(current, baseline):
     return "\n".join(lines)
 
 
+def compare_outputs(current, reference):
+    """Require identical decoded choices; allow only small logsum roundoff."""
+    diagnostics = {}
+    require(set(current) == set(reference), "Backend comparison: different tables")
+    for name, actual in current.items():
+        expected = reference[name]
+        # Recoding adds implementation-only original-ID columns. Public outputs
+        # have already been decoded by write_tables and must match by entity ID.
+        columns = [c for c in actual if not c.startswith("_original_")]
+        reference_columns = [c for c in expected if not c.startswith("_original_")]
+        require(set(columns) == set(reference_columns), f"{name}: different columns")
+        actual = actual[sorted(columns)].sort_index()
+        expected = expected[sorted(columns)].sort_index()
+        pd.testing.assert_index_equal(actual.index, expected.index, exact=False)
+        for column in actual:
+            a, b = actual[column], expected[column]
+            # Logsum calculations can differ at floating point precision between
+            # NumPy and compiled evaluation. IDs, choices, times and all other
+            # attributes must match exactly, even if stored as floating point.
+            is_logsum = "logsum" in column
+            try:
+                pd.testing.assert_series_equal(
+                    a,
+                    b,
+                    check_dtype=False,
+                    check_categorical=False,
+                    check_exact=not is_logsum,
+                    rtol=1e-5 if is_logsum else 0,
+                    atol=1e-5 if is_logsum else 0,
+                )
+            except AssertionError as error:
+                raise ValueError(
+                    f"Backend mismatch in {name}.{column}: {error}"
+                ) from error
+            if is_logsum:
+                finite = np.isfinite(a) & np.isfinite(b)
+                diagnostics[f"{name}.{column}"] = (
+                    float((a[finite] - b[finite]).abs().max()) if finite.any() else 0.0
+                )
+    return diagnostics
+
+
+def model_configs(output, single_process=False, sharrow="off"):
+    """Build the same execution overlays used by the documented CLI commands."""
+    require(sharrow in {"off", "require"}, "Unsupported Sharrow mode")
+    configs = [ROOT / "tests/model", ROOT / "model/configs_mp", ROOT / "model/configs"]
+    if sharrow == "require":
+        configs.insert(0, ROOT / "model/configs_sh")
+    overlay = output / "config"
+    overlay.mkdir()
+    runtime = {
+        "inherit_settings": True,
+        "sharrow_cache_dir": str(output / "sharrow_cache"),
+    }
+    if single_process:
+        runtime["multiprocess"] = False
+    (overlay / "settings.yaml").write_text(yaml.safe_dump(runtime))
+    # Do not attach to another run's named shared-memory skims.
+    name = hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:16]
+    (overlay / "network_los.yaml").write_text(
+        yaml.safe_dump({"inherit_settings": True, "name": f"lighthouse_ci_{name}"})
+    )
+    configs.insert(0, overlay)
+    return configs
+
+
+def validate_comparison_metadata(current, reference):
+    """Do not call different fixtures, model revisions, or seeds backend parity."""
+    for key in ["seed", "sample_households", "single_process", "packages"]:
+        require(reference[key] == current[key], f"Backend comparison: different {key}")
+    require(reference["returncode"] == 0, "Reference run failed")
+    require(
+        reference["sharrow"] != current["sharrow"], "Compare opposite Sharrow modes"
+    )
+    for path, checksum in reference["sha256"].items():
+        # Only the selected execution overlay may differ.
+        if path.startswith("model/configs_sh/"):
+            continue
+        require(
+            current["sha256"].get(path) == checksum,
+            f"Backend comparison: changed {path}",
+        )
+    for path in current["sha256"]:
+        if not path.startswith("model/configs_sh/"):
+            require(path in reference["sha256"], f"Backend comparison: added {path}")
+
+
 def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--households", type=int, default=2000)
     parser.add_argument("--output", type=Path, default=ROOT / "model/output_ci")
     parser.add_argument("--single-process", action="store_true")
+    parser.add_argument("--sharrow", choices=["off", "require"], default="off")
+    parser.add_argument(
+        "--compare-to",
+        type=Path,
+        help="Validate against a completed opposite-backend run",
+    )
     args = parser.parse_args()
     output = args.output.resolve()
     require(not output.exists(), f"Refusing to reuse existing output: {output}")
@@ -217,19 +310,14 @@ def main():
     inputs = {"households": households, "persons": persons}
     for name, frame in inputs.items():
         frame.to_csv(data / f"{name}.csv")
-    configs = [ROOT / "tests/model", ROOT / "model/configs_mp", ROOT / "model/configs"]
-    if args.single_process:
-        overlay = output / "config"
-        overlay.mkdir()
-        (overlay / "settings.yaml").write_text(
-            "inherit_settings: true\nmultiprocess: false\n"
-        )
-        configs.insert(0, overlay)
+    configs = model_configs(output, args.single_process, args.sharrow)
     command = [sys.executable, "-m", "activitysim", "run"]
     for config in configs:
         command += ["-c", str(config)]
     command += ["-d", str(data), "-d", str(source), "-o", str(output)]
     if (ROOT / "extensions").is_dir():
+        # Workers in the locked release import this as a module, not a path.
+        # The child process always runs with cwd=ROOT.
         command += ["--ext", "extensions"]
     env = os.environ.copy()
     for name in [
@@ -242,13 +330,15 @@ def main():
     ]:
         env[name] = "1"
     tracked_inputs = list(source.glob("*.csv")) + list(source.glob("*.omx"))
-    tracked_configs = list((ROOT / "model/configs").glob("*")) + list(
-        (ROOT / "model/configs_mp").glob("*")
-    )
+    tracked_configs = [
+        p for config in configs if config != output / "config" for p in config.glob("*")
+    ]
     metadata = {
         "seed": 0,
         "sample_households": args.households,
         "single_process": args.single_process,
+        "sharrow": args.sharrow,
+        "recode_pipeline_columns": args.sharrow == "require",
         "python": sys.version,
         "platform": platform.platform(),
         "command": command,
@@ -263,6 +353,7 @@ def main():
             str(p.relative_to(ROOT)): digest(p)
             for p in tracked_inputs
             + tracked_configs
+            + list((ROOT / "extensions").glob("*.py"))
             + [
                 ROOT / "uv.lock",
                 ROOT / "tests/model/settings.yaml",
@@ -312,6 +403,25 @@ def main():
         }
         zones = pd.read_csv(source / "land_use.csv").TAZ
         validate_outputs(inputs, tables, zones)
+        if args.compare_to:
+            previous = json.loads((args.compare_to / "report/run.json").read_text())
+            validate_comparison_metadata(metadata, previous)
+            reference = {
+                name: pd.read_parquet(args.compare_to / f"final_{name}.parquet")
+                for name in tables
+            }
+            differences = compare_outputs(tables, reference)
+            (report_dir / "backend-comparison.json").write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "reference": str(args.compare_to.resolve()),
+                        "max_logsum_absolute_differences": differences,
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
         expected = yaml.safe_load(
             (ROOT / "model/configs_mp/settings.yaml").read_text()
         )["models"]
@@ -335,6 +445,11 @@ def main():
             f"Peak summed process RSS: {peak / 1024**3:.2f} GiB "
             "(shared pages may be counted more than once).\n\n"
             f"Scheduling fallback trips: {fallback}. Warning/error log lines: {len(warnings)}.\n\n"
+            + (
+                "Sharrow on/off decoded-output comparison passed.\n\n"
+                if args.compare_to
+                else ""
+            )
             + (
                 advisory(summary, baseline)
                 if baseline

@@ -1,0 +1,28 @@
+# PROTOTYPE ASSUMPTIONS: not estimated or validated. See docs/fixed-work-schedule-probabilities.md.
+Label,Description,Expression,fixed,other
+industry_11,Industry reference-income intercept,naics_code == 11,coef_industry_11,0
+industry_21,Industry reference-income intercept,naics_code == 21,coef_industry_21,0
+industry_22,Industry reference-income intercept,naics_code == 22,coef_industry_22,0
+industry_23,Industry reference-income intercept,naics_code == 23,coef_industry_23,0
+industry_31,Industry reference-income intercept,naics_code == 31,coef_industry_31,0
+industry_32,Industry reference-income intercept,naics_code == 32,coef_industry_32,0
+industry_33,Industry reference-income intercept,naics_code == 33,coef_industry_33,0
+industry_42,Industry reference-income intercept,naics_code == 42,coef_industry_42,0
+industry_44,Industry reference-income intercept,naics_code == 44,coef_industry_44,0
+industry_45,Industry reference-income intercept,naics_code == 45,coef_industry_45,0
+industry_48,Industry reference-income intercept,naics_code == 48,coef_industry_48,0
+industry_49,Industry reference-income intercept,naics_code == 49,coef_industry_49,0
+industry_51,Industry reference-income intercept,naics_code == 51,coef_industry_51,0
+industry_52,Industry reference-income intercept,naics_code == 52,coef_industry_52,0
+industry_53,Industry reference-income intercept,naics_code == 53,coef_industry_53,0
+industry_54,Industry reference-income intercept,naics_code == 54,coef_industry_54,0
+industry_55,Industry reference-income intercept,naics_code == 55,coef_industry_55,0
+industry_56,Industry reference-income intercept,naics_code == 56,coef_industry_56,0
+industry_61,Industry reference-income intercept,naics_code == 61,coef_industry_61,0
+industry_62,Industry reference-income intercept,naics_code == 62,coef_industry_62,0
+industry_71,Industry reference-income intercept,naics_code == 71,coef_industry_71,0
+industry_721,Industry reference-income intercept,naics_code == 721,coef_industry_721,0
+industry_722,Industry reference-income intercept,naics_code == 722,coef_industry_722,0
+industry_81,Industry reference-income intercept,naics_code == 81,coef_industry_81,0
+industry_92,Industry reference-income intercept,naics_code == 92,coef_industry_92,0
+income,Log income relative to reference,fixed_schedule_income_term,coef_income,0

@@ -20,7 +20,7 @@ PRIMARY_DEST: tour_leg_dest  # must be created in preprocessor
 
 # tour_mode is already in trips table, so we don't need it from tours
 # (it is assigned in trip_destination_annotate_trips_preprocessor )
-REDUNDANT_TOURS_MERGED_CHOOSER_COLUMNS: [tour_mode]
+REDUNDANT_TOURS_MERGED_CHOOSER_COLUMNS: [tour_mode, walk_distance_limit]
 CONSTANTS:
   max_walk_distance: 3
   max_bike_distance: 8
@@ -37,4 +37,10 @@ CLEANUP: false
 # this setting is used by testing code to force failed trip_destination
 # fail_some_trips_for_testing: false
 
-explicit_chunk: 0.1
+explicit_chunk: 100_000
+
+# Use identical sampled alternatives/probabilities with either backend.
+# Logsum and final-choice evaluation still use Sharrow when required.
+compute_settings:
+  sharrow_skip:
+    sample: true

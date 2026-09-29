@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
 spec = importlib.util.spec_from_file_location(
     "model_ci", Path(__file__).parents[1] / "scripts/model_ci.py"
@@ -156,3 +157,71 @@ def test_distribution_changes_are_advisory():
     )
     assert "+100.00 pp" in report
     assert "-100.00 pp" in report
+
+
+def test_backend_comparison_matches_decoded_choices(outputs):
+    reference = copy.deepcopy(outputs)
+    reference["tours"]["mode_choice_logsum"] = 1.0
+    outputs["tours"]["mode_choice_logsum"] = 1.000001
+    outputs["persons"]["_original_zone_id"] = 123
+    report = ci.compare_outputs(outputs, reference)
+    assert report["tours.mode_choice_logsum"] == pytest.approx(0.000001)
+
+
+@pytest.mark.parametrize(
+    "table,column,value",
+    [
+        ("trips", "destination", 99),
+        ("trips", "trip_mode", "CAR"),
+        ("persons", "age", 41),
+        ("tours", "start", 8.000001),
+    ],
+)
+def test_backend_comparison_rejects_changed_decisions(outputs, table, column, value):
+    changed = copy.deepcopy(outputs)
+    changed[table][column] = value
+    with pytest.raises(ValueError, match="Backend mismatch"):
+        ci.compare_outputs(changed, outputs)
+
+
+def test_backend_comparison_rejects_large_logsum_difference(outputs):
+    outputs["tours"]["mode_choice_logsum"] = 1.0
+    changed = copy.deepcopy(outputs)
+    changed["tours"]["mode_choice_logsum"] = 1.1
+    with pytest.raises(ValueError, match="mode_choice_logsum"):
+        ci.compare_outputs(changed, outputs)
+
+
+@pytest.mark.parametrize("single_process", [True, False])
+@pytest.mark.parametrize("sharrow", ["off", "require"])
+def test_ci_execution_overlays(tmp_path, single_process, sharrow):
+    paths = ci.model_configs(tmp_path, single_process, sharrow)
+    assert (ci.ROOT / "model/configs_sh" in paths) == (sharrow == "require")
+    assert paths[0] == tmp_path / "config"
+    runtime = yaml.safe_load((paths[0] / "settings.yaml").read_text())
+    assert (runtime.get("multiprocess") is False) == single_process
+    assert runtime["sharrow_cache_dir"] == str(tmp_path / "sharrow_cache")
+    assert paths[-1] == ci.ROOT / "model/configs"
+
+
+def test_backend_comparison_requires_matching_provenance():
+    off = {
+        "seed": 0,
+        "sample_households": 2000,
+        "single_process": False,
+        "packages": {"activitysim": "1.5.1"},
+        "returncode": 0,
+        "sharrow": "off",
+        "sha256": {"model/data/land_use.csv": "same"},
+    }
+    on = copy.deepcopy(off)
+    on["sharrow"] = "require"
+    on["sha256"]["model/configs_sh/settings.yaml"] = "overlay"
+    ci.validate_comparison_metadata(on, off)
+    on["sha256"]["model/data/land_use.csv"] = "changed"
+    with pytest.raises(ValueError, match="changed model/data/land_use.csv"):
+        ci.validate_comparison_metadata(on, off)
+    on["sha256"]["model/data/land_use.csv"] = "same"
+    on["seed"] = 1
+    with pytest.raises(ValueError, match="different seed"):
+        ci.validate_comparison_metadata(on, off)

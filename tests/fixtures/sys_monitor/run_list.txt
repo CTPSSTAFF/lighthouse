@@ -1,0 +1,31 @@
+resume_after: None
+multiprocess: True
+models:
+  - initialize_landuse
+  - school_location
+  - constraint_new_access
+  - write_tables
+
+multiprocess_steps:
+  step: prepare
+    name: prepare
+    begin: initialize_landuse
+    num_processes: 1
+    slice: None
+    chunk_size: 0
+    models:
+       - initialize_landuse
+  step: choices_renamed
+    name: choices_renamed
+    begin: school_location
+    num_processes: 2
+    slice: {'tables': ['households', 'persons'], 'exclude': None}
+    models:
+       - school_location
+       - constraint_new_access
+  step: export
+    name: export
+    begin: write_tables
+    num_processes: 1
+    models:
+       - write_tables

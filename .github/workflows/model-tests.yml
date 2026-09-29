@@ -50,22 +50,34 @@ jobs:
           version: '0.12.13'
           enable-cache: true
       - run: uv sync --locked
-      - name: Run full model sequence for fixed households
-        run: uv run --locked python scripts/model_ci.py
+      - name: Run fixed households without Sharrow
+        run: >-
+          uv run --locked python scripts/model_ci.py
+          --sharrow off --output model/output_ci_off
+      - name: Require Sharrow and compare decoded results
+        run: >-
+          uv run --locked python scripts/model_ci.py
+          --sharrow require --output model/output_ci_sh
+          --compare-to model/output_ci_off
       - name: Save diagnostics
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: model-report
           path: |
-            model/output_ci/report/
-            model/output_ci/*.log
+            model/output_ci_*/report/
+            model/output_ci_*/*.log
           retention-days: 14
       - name: Verify locked inputs were not modified
-        run: git diff --exit-code -- pyproject.toml uv.lock model/configs model/configs_mp model/data
+        run: >-
+          git diff --exit-code -- pyproject.toml uv.lock model/configs
+          model/configs_mp model/configs_sh model/configs_explicit_chunk
+          model/data
 
   broader:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -83,12 +95,20 @@ jobs:
           version: '0.12.13'
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run --locked python scripts/model_ci.py ${{ matrix.args }}
+      - name: Run without Sharrow
+        run: >-
+          uv run --locked python scripts/model_ci.py ${{ matrix.args }}
+          --sharrow off --output model/output_ci_off
+      - name: Require Sharrow and compare decoded results
+        run: >-
+          uv run --locked python scripts/model_ci.py ${{ matrix.args }}
+          --sharrow require --output model/output_ci_sh
+          --compare-to model/output_ci_off
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: model-report-${{ matrix.name }}
           path: |
-            model/output_ci/report/
-            model/output_ci/*.log
+            model/output_ci_*/report/
+            model/output_ci_*/*.log
           retention-days: 14

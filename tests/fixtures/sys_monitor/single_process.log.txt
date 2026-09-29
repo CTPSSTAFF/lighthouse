@@ -1,0 +1,5 @@
+01/01/2026 12:00:00 - INFO - activitysim.core.workflow.runner - resume_after initialize_landuse
+01/01/2026 12:00:01 - INFO - activitysim.core.workflow.runner - #run_model running step constraint_new_access
+01/01/2026 12:00:02 - Level 25 - activitysim.core.workflow.runner -  time to execute run.constraint_new_access : 0.02 seconds (0.0 minutes)
+01/01/2026 12:00:03 - Level 25 - activitysim.core.workflow.runner -  time to execute run.write_tables : 0.03 seconds (0.0 minutes)
+01/01/2026 12:00:04 - INFO - activitysim.core.tracing - Time to execute all models completed : 4.00 seconds (0.1 minutes)

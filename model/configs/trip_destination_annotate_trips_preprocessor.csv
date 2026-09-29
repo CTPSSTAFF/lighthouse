@@ -11,3 +11,4 @@ Description,Target,Expression
 # the following two lines have been migrated from the utility spec files because `reindex` is not compatible with sharrow
 ,tour_mode_is_walk,"reindex(tours.tour_mode, df.tour_id)=='WALK'"
 ,tour_mode_is_bike,"reindex(tours.tour_mode, df.tour_id)=='BIKE'"
+,walk_distance_limit,"reindex(persons.walk_distance_limit, df.person_id)"
