@@ -106,6 +106,7 @@ preprocessor:
 #      - land_use
 # to reduce memory needs filter chooser table to these fields
 TOURS_MERGED_CHOOSER_COLUMNS:
+  - walk_distance_limit
   - hhsize
   - age
   - auto_ownership
@@ -120,3 +121,7 @@ TOURS_MERGED_CHOOSER_COLUMNS:
   - person_id
   - household_id
 MODE_CHOICE_LOGSUM_COLUMN_NAME: mode_choice_logsum
+
+# Walking limits may be infinite; preserve IEEE NaN/Inf semantics.
+compute_settings:
+  fastmath: false

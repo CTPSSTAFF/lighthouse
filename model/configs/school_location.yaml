@@ -50,4 +50,10 @@ MODELED_SIZE_TABLE: school_modeled_size
 # not loaded if commented out
 SAVED_SHADOW_PRICE_TABLE_NAME: school_shadow_prices.csv
 
-explicit_chunk: 0.1
+explicit_chunk: 50_000
+
+# Use identical sampled alternatives/probabilities with either backend.
+# Logsum and final-choice evaluation still use Sharrow when required.
+compute_settings:
+  sharrow_skip:
+    sample: true

@@ -1,6 +1,7 @@
 Description,Target,Expression
-,is_joint,(df.number_of_participants > 1)
-,is_indiv,(df.number_of_participants == 1)
+# Retain only columns referenced by trip_mode_choice.csv. Intermediate values are folded into their final outputs to bound full-frame location-logsum memory.,,
+,is_joint,df.number_of_participants > 1
+,is_indiv,df.number_of_participants == 1
 ,is_atwork_subtour,~df.parent_tour_id.isnull()
 ,ivot,1.0 / df.value_of_time
 #,,

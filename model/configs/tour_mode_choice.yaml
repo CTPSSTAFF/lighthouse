@@ -102,17 +102,17 @@ CONSTANTS:
   ridesource_wait_time_multiplier: 1.5
 
 preprocessor:
-  SPEC: tour_mode_choice_annotate_choosers_preprocessor
+  SPEC: tour_mode_choice_annotate_tours
   DF: choosers
   TABLES: [land_use, tours]
 nontour_preprocessor:
-  SPEC: tour_mode_choice_annotate_choosers_preprocessor
+  SPEC: tour_mode_choice_annotate_nontour
   DF: choosers
-  TABLES:
-    - land_use
+  TABLES: [land_use]
 
 # to reduce memory needs filter chooser table to these fields
 LOGSUM_CHOOSER_COLUMNS:
+  - walk_distance_limit
   - tour_type
   - hhsize
   - density_index
@@ -127,3 +127,7 @@ LOGSUM_CHOOSER_COLUMNS:
   - free_parking_at_work
 
 MODE_CHOICE_LOGSUM_COLUMN_NAME: mode_choice_logsum
+
+# Walking limits may be infinite; preserve IEEE NaN/Inf semantics.
+compute_settings:
+  fastmath: false

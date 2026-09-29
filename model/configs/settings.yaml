@@ -46,6 +46,7 @@ input_table_list:
       - pemploy
       - pstudent
       - ptype
+      - naics_code
   #
   # land_use (table index 'zone_id')
   #
@@ -82,7 +83,10 @@ input_table_list:
       - COLLPTE
       - TOPOLOGY
       - TERMINAL
-recode_pipeline_columns: true
+# Original OMX zone IDs are required by the non-Sharrow skim dictionary.
+# Use configs_sh to enable Sharrow together with recoding.
+recode_pipeline_columns: false
+sharrow: false
 
 # convert input CSVs to HDF5 format and save to outputs directory
 # create_input_store: true
@@ -175,11 +179,19 @@ models:
   - initialize_landuse
   - initialize_households
   - compute_accessibility
+  - work_from_home
+  - constraint_fixed_work_schedule
+  - constraint_can_travel_alone
+  - constraint_walk_ability
   - school_location
   - workplace_location
+  - constraint_school_bus_availability
   - auto_ownership_simulate
   - free_parking
+  - telecommute_frequency
   - cdap_simulate
+  - telework_arrangement
+  - telework_duration
   - mandatory_tour_frequency
   - mandatory_tour_scheduling
   - non_mandatory_tour_frequency
@@ -250,10 +262,4 @@ household_median_value_of_time:
 
 ###########
 # Sharrow
-# Uncomment the sharrow setting to enable sharrow.
-# Sharrow can be set to one of these values:
-# true: attempt to use sharrow compiler, if fails, fall back to pandas
-# require: always use sharrow compiler, if fails, raise error. use this if max performance is desired.
-# test: run both sharrow compiler and pandas, compare results, raise error if they differ. use this to validate sharrow compiler, not recommended for production runs.
-
-#sharrow: require
+# For compiled evaluation, add -c model/configs_sh before the base configs.

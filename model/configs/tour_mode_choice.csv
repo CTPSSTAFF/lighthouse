@@ -99,3 +99,5 @@ util_Ridesource_Zero_auto,Ridesource - Zero auto,@(df.is_indiv & (df.auto_owners
 util_Ridesource_Auto_deficient,Ridesource - Auto deficient,@(df.is_indiv & (df.auto_ownership < df.num_workers) & (df.auto_ownership > 0)),,,,,,,,ridesource_ASC_auto_deficient
 util_Ridesource_Auto_sufficient,Ridesource - Auto sufficient,@(df.is_indiv & (df.auto_ownership >= df.num_workers) & (df.auto_ownership > 0)),,,,,,,,ridesource_ASC_auto_sufficient
 #,,,,,,,,,,
+util_person_walk_limit,Person walking distance limit,@od_skims.max('dist_nm') > df.walk_distance_limit,,,,-999,,,,
+util_person_walk_transit_limit,Person transit walking distance limit,"@np.maximum(odt_skims['tw_walk'], dot_skims['tw_walk']) * WALK_TRANSIT_WALK_MINUTES_PER_UNIT * walkSpeed / 60 > df.walk_distance_limit",,,,,,-999,,

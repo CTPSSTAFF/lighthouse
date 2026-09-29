@@ -1,16 +1,17 @@
 ---
-# read trips table post preprocessor and run expressions to code
-# additional data fields, with one data fields for each matrix specified below
+# Aggregate trips into the four skim time periods defined in network_los.yaml
+# using the model's current eight trip modes.
 preprocessor:
   SPEC: write_trip_matrices_annotate_trips_preprocessor
   DF: trips
   TABLES:
     - tours
-# divide trip counts by household expansion factor
-HH_EXPANSION_WEIGHT_COL: sample_rate  # added when households read in
 
-# save preprocessed trips table to pipeline if desired
+# Divide trip counts by the household expansion factor.
+HH_EXPANSION_WEIGHT_COL: sample_rate
+
 SAVE_TRIPS_TABLE: false
+
 MATRICES:
   - file_name: trips_am.omx
     tables:

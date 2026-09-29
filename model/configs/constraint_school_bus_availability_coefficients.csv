@@ -1,0 +1,7 @@
+coefficient_name,value,constrain
+coef_no_school_bus_asc,-0.05,F
+coef_unavailable,-999,T
+coef_school_k12,0.2,F
+coef_dist_within_radius,-1.5,F
+coef_areatype_urban,-0.8,F
+coef_areatype_rural,1,F

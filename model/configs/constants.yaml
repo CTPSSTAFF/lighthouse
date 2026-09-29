@@ -47,3 +47,6 @@ PTYPE_NAME:
 CDAP_ACTIVITY_MANDATORY: M
 CDAP_ACTIVITY_NONMANDATORY: N
 CDAP_ACTIVITY_HOME: H
+
+# Active mode choice treats tw_walk as minutes, unlike scaled transit skims.
+WALK_TRANSIT_WALK_MINUTES_PER_UNIT: 1.0

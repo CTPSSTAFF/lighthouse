@@ -1,12 +1,11 @@
 Description,Target,Expression
-# add additional fields,,
+#,,
 ,tour_participants,trips.tour_id.map(tours.number_of_participants)
-,distance,od_skims['DIST']
 # code time periods,,
 ,is_am,"trips.depart.between(time_periods['AM']['first_hour'], time_periods['AM']['last_hour'])"
 ,is_md,"trips.depart.between(time_periods['MD']['first_hour'], time_periods['MD']['last_hour'])"
 ,is_pm,"trips.depart.between(time_periods['PM']['first_hour'], time_periods['PM']['last_hour'])"
-,is_ev,(trips.depart >= time_periods['EV']['first_hour']) | (trips.depart <=  time_periods['EV']['last_hour'])
+,is_ev,(trips.depart >= time_periods['EV']['first_hour']) | (trips.depart <= time_periods['EV']['last_hour'])
 # am trips,,
 ,DRIVEALONE_AM,((trips.trip_mode == 'DRIVEALONE') & is_am) * tour_participants
 ,SHARED2_AM,((trips.trip_mode == 'SHARED2') & is_am) * tour_participants / OCC_SHARED2

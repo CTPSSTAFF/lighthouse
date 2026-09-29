@@ -125,3 +125,5 @@ util_Bike_not_available_for_long_distances,Bike not available for long distances
 util_origin_density_index,Origin density index,@origin_density_applied*(origin_density_index_multiplier*df.origin_density_index).clip(origin_density_index_max),,,,coef_ivt,coef_ivt,coef_ivt,,
 util_walk_express_penalty,Walk-express penalty for intermediate stops,@walk_express_penalty * ~(df.first_trip | df.first_trip),,,,,,,,
 util_adjust_tnc_shared,TNC shared adjustment,@adjust_tnc_shared,,,,,,,,
+util_person_walk_limit,Person walking distance limit,@od_skims['dist_nm'] > df.walk_distance_limit,,,,-999,,,,
+util_person_walk_transit_limit,Person transit walking distance limit,@odt_skims['tw_walk'] * WALK_TRANSIT_WALK_MINUTES_PER_UNIT * walkSpeed / 60 > df.walk_distance_limit,,,,,,-999,,

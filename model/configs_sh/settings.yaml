@@ -1,0 +1,4 @@
+---
+inherit_settings: true
+sharrow: require
+recode_pipeline_columns: true
