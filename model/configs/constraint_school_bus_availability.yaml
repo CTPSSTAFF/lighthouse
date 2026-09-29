@@ -1,0 +1,13 @@
+SPEC: constraint_school_bus_availability.csv
+COEFFICIENTS: constraint_school_bus_availability_coefficients.csv
+
+LOGIT_TYPE: MNL
+
+CONSTANTS:
+  SCHOOL_BUS_MIN_ELIGIBLE_AGE: 5 # Youngest age eligible for school bus service
+  SCHOOL_BUS_MAX_ELIGIBLE_AGE: 18 # Oldest age eligible for school bus service
+  SCHOOL_BUS_SERVICE_RADIUS_MILES: 2
+
+# Missing school distances are NaN; comparisons must preserve NumPy semantics.
+compute_settings:
+  fastmath: false

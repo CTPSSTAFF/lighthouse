@@ -1,0 +1,7 @@
+---
+# User-specified scenario assumptions; not estimated or behaviorally validated.
+# Probabilities are conditional on the adult travel-alone override not applying.
+LIMITED_WALK_DISTANCE: 0.15  # Miles; exactly this distance remains available.
+ADULT_AGE: 18
+PROBABILITY_65_79: 0.50
+PROBABILITY_80_PLUS: 0.20

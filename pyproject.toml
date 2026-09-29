@@ -4,9 +4,9 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = "==3.10.*"
 dependencies = [
-    "activitysim>=1.5.1",
+    "activitysim>=1.6",
     "platformdirs>=4.10.0",
-    "sharrow>=2.15.0",
+    "sharrow>=2.16.2",
 ]
 
 [build-system]

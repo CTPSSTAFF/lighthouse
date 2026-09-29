@@ -1,0 +1,84 @@
+---
+name: Developer environment
+
+on:
+  push:
+    paths:
+      - scripts/make-developer-env.py
+      - tests/test_developer_env.py
+      - .github/workflows/developer-env.yml
+      - pyproject.toml
+      - uv.lock
+  pull_request:
+    paths:
+      - scripts/make-developer-env.py
+      - tests/test_developer_env.py
+      - .github/workflows/developer-env.yml
+      - pyproject.toml
+      - uv.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup-and-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.13'
+          enable-cache: false
+      - name: Test setup and runner behavior
+        run: python -m unittest discover -s tests -p test_developer_env.py
+      - name: Set up from a clean checkout, then repeat
+        run: |
+          python scripts/make-developer-env.py
+          python scripts/make-developer-env.py
+      - name: Check actual imports and local editability
+        shell: python
+        run: |
+          import pathlib
+          import subprocess
+          import sys
+
+          root = pathlib.Path.cwd()
+          probe = '''
+          from pathlib import Path
+          import activitysim
+          import sharrow
+          root = Path.cwd().parent
+          for module in (activitysim, sharrow):
+              source = Path(module.__file__).resolve()
+              assert source.is_relative_to(root / module.__name__), source
+              print(module.__name__, source)
+          '''
+          subprocess.run([sys.executable, 'uv-local', 'python', '-c', probe], check=True)
+          # A newly added module must be visible without rebuilding the runner.
+          marker = root.parent / 'sharrow' / 'sharrow' / '_lighthouse_ci_probe.py'
+          try:
+              marker.write_text('VALUE = 42\n', encoding='utf-8')
+              subprocess.run([
+                  sys.executable, 'uv-local', 'python', '-c',
+                  'from sharrow._lighthouse_ci_probe import VALUE; assert VALUE == 42',
+              ], check=True)
+          finally:
+              marker.unlink(missing_ok=True)
+      - name: Check ignored runner and unchanged checkout
+        shell: python
+        run: |
+          import subprocess
+
+          subprocess.run(['git', 'check-ignore', 'uv-local'], check=True)
+          subprocess.run(['git', 'diff', '--exit-code', '--', 'pyproject.toml', 'uv.lock'], check=True)
+          status = subprocess.check_output(['git', 'status', '--porcelain'], text=True)
+          assert not status.strip(), status

@@ -1,0 +1,9 @@
+---
+inherit_settings: true
+num_processes: 2
+households_sample_size: 0
+rng_base_seed: 0
+checkpoints: true
+resume_after: null
+read_skim_cache: false
+write_skim_cache: false
