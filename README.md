@@ -27,6 +27,8 @@ To run the model with test data, use the following command:
 ```bash
 cd model
 uv run --project .. activitysim run -c configs_mp -c configs -d data -o ../output-24-2K --ext extensions --households_sample_size 2000
+# run all households in the test data
+# uv run --project .. activitysim run -c configs_mp -c configs -d data -o output --ext extensions
 ```
 
 ## Monitoring
