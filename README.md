@@ -41,6 +41,11 @@ The production benchmark enforces a container limit, disables container swap, va
 and outputs, and records the complete container memory peak. The ordinary README smoke command
 uses the smaller subarea inputs and does not establish full-scale memory requirements.
 
+The revised full population qualified with four workers twice: **47.50 and 50.23 GB peak**, about
+**2 h 18 m** per run, with no container swap or OOM. Final model tables were byte-identical across
+those runs. See [measured results and the tested command](docs/laptop-memory-results.md).
+This is the approved memory-budget proxy; testing on a physical 64 GB laptop remains deferred.
+
 ## Constraint components
 
 See [Fixed work schedule](docs/fixed-work-schedule.md) for the industry/income logit prototype,

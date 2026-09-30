@@ -3,9 +3,13 @@
 The target is a complete model run on a 64 GB laptop with room for its operating system and
 background applications. See the [implementation plan](laptop-memory-qualification-plan.md). Use
 actual physical bytes when budgeting: 1 GiB is 1,073,741,824 bytes; 1 GB is 1,000,000,000 bytes.
-Benchmark `g` arguments are GiB. The default container target is 48 GiB, with a 50 GiB hard limit,
-inside a Linux VM with at least 52 GiB. On a 64 GiB host that leaves 12 GiB outside the VM. Reduce
-allocations for a smaller host or heavier background workload.
+Benchmark `g` arguments are GiB. The tested container target is 47 GiB, with a 48.5 GiB hard limit,
+inside a Docker VM configured to 52 GiB. Docker reported 50.89 GiB usable Linux memory, leaving
+more than 2 GiB above the container limit. On a 64 GiB host, the configured VM leaves 12 GiB outside
+the VM. Reduce allocations for a smaller host or heavier background workload. Pass the limits
+explicitly: the benchmark defaults remain 48 GiB target / 50 GiB hard cap.
+
+See [measured results](laptop-memory-results.md) for completed runs, the selected four-worker configuration, and artifacts.
 
 ## Choose the measurement
 
@@ -84,6 +88,7 @@ Start with a full-geography integration sample:
 ```sh
 uv run --locked python scripts/production-benchmark.py \
   --data-dir model/data_full --sample-households 5000 --processes 2 \
+  --memory-limit 48.5g --qualification-peak 47g --shm-size 16g \
   --output-dir model/output/laptop-smoke/timestamp \
   --cache-dir model/output/laptop-smoke-cache
 ```
@@ -93,7 +98,7 @@ Then run the full population in fresh output directories:
 ```sh
 uv run --locked python scripts/production-benchmark.py \
   --data-dir model/data_full --sample-households 0 --processes 2 4 \
-  --memory-limit 50g --qualification-peak 48g --shm-size 16g \
+  --memory-limit 48.5g --qualification-peak 47g --shm-size 16g \
   --output-dir model/output/laptop-qualification/timestamp \
   --cache-dir model/output/laptop-qualification-cache
 ```

@@ -1,6 +1,17 @@
 # 64 GB laptop memory qualification plan
 
-Status: implementation and validation in progress on branch `codex/laptop-memory-qualification`.
+Status: **all five phases complete, 2026-09-30**, on branch `codex/laptop-memory-qualification`.
+See [measured results](laptop-memory-results.md) for the completion evidence and tested command.
+The sections below retain the original plan and historical findings; the accepted physical-hardware
+deferral remains in effect.
+
+| Phase | Completion evidence |
+| --- | --- |
+| 1. Execution/reproducibility | Both harnesses exercised; locked image, extension imports, profile and reuse repairs complete |
+| 2. Monitoring/decisions | Dynamic monitor and strict qualification tests pass; synthetic cgroup/OOM checks pass |
+| 3. Input/integration | Revised full inputs pass preflight; 148 tests and final native backend fixture comparison pass |
+| 4. Full-scale qualification | Fresh 2-worker and 4-worker runs plus 4-worker repeat qualify; worst peak 50.23 GB; repeated final tables are byte-identical |
+| 5. Handoff | Tested commands, results and raw artifacts retained; Docker's original allocation restored; implementation committed on the new branch |
 
 Acceptance amendment (user, 2026-09-29): no representative 64 GB laptop is available. Complete the
 constrained-container tests here, targeting approximately 50–55 GB maximum model memory as a proxy.
@@ -40,7 +51,7 @@ The development Mac has 128 GiB RAM. A constrained run here can establish the mo
 budget, but cannot by itself demonstrate host responsiveness or swapping on a 64 GB laptop. Final
 end-to-end validation should use a representative 64 GB machine and intended runtime.
 
-## Starting findings
+## Starting findings (historical baseline)
 
 The review baseline is Lighthouse `89faf63` on branch `ACTIONER`. Preserve unrelated work, including
 the untracked `.github/github-app.yml`.
@@ -168,8 +179,8 @@ introduce unapproved behavioral changes, and preflight reports precisely what th
    growth, memory pressure, and ordinary interactive responsiveness. If that hardware is
    unavailable, report only container-budget qualification and leave laptop validation pending.
 
-Planned initial full-scale command, after the harness repairs and input update (the laptop overlay
-must be enabled by the repaired runner):
+Full-scale command after repairs and input delivery (adjusted to the Docker VM's measured usable
+RAM; the initial budget above is retained as planning history):
 
 ```sh
 cd /Users/jpn/Git/boston-model/lighthouse
@@ -177,16 +188,16 @@ uv run --locked python scripts/production-benchmark.py \
   --data-dir model/data_full \
   --sample-households 0 \
   --processes 2 4 \
-  --memory-limit 50g \
-  --qualification-peak 48g \
+  --memory-limit 48.5g \
+  --qualification-peak 47g \
   --shm-size 16g \
   --sample-interval 1 \
   --cache-dir model/output/laptop-qualification-cache \
   --output-dir model/output/laptop-qualification/timestamp
 ```
 
-These `g` values use binary GiB. Do not run this command against the unrepaired harness or the
-current incomplete full persons input. Smoke runs use a separate output directory and
+These `g` values use binary GiB. The repaired harness and revised full persons input passed
+preflight. Smoke runs use a separate output directory and
 `--sample-households 5000`; cold-cache tests use a new cache directory.
 
 ## Phase 5: Documentation and handoff

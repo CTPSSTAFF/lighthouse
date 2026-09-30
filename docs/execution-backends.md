@@ -52,10 +52,10 @@ removes leading whitespace rejected by the CDAP expression compiler. Behavioral 
 unchanged.
 
 The documented `python uv-local` runner can replace `uv run --locked` for sibling-source
-development. ActivitySim 1.6 supports the additional trip-mode chunk budget in
-`model/configs_explicit_chunk`; add that directory before the other configs to opt in. This setting
-was isolated because ActivitySim 1.5.1 rejected it. It remains optional and is not included in base
-configuration or CI runs. The other existing component chunk settings remain in place.
+development. The optional laptop profile uses `model/configs_explicit_chunk` before the normal
+configs to bound destination sampling, scheduling, and joins. Both benchmark scripts select it by
+default; `model_ci.py` selects it with `--profile laptop`. The base configuration remains available.
+See [memory qualification](laptop-memory.md) for the tested settings and compatibility extensions.
 
 ActivitySim 1.6's zero-probability path disables utility shifting. Compiled utilities can use
 float32, so finite utilities around -127 underflow when exponentiated and incorrectly produce failed
@@ -67,13 +67,16 @@ cases; full-geography backend comparisons check actual decisions.
 ## Backend stability checks
 
 ```sh
-uv run --locked pytest tests -q
-uv run --locked python scripts/model_ci.py --sharrow off --output model/output_ci_off
-uv run --locked python scripts/model_ci.py --sharrow require --output model/output_ci_sh \
-  --compare-to model/output_ci_off
+LIGHTHOUSE_TEST_DATA_DIR=model/data_full uv run --locked pytest tests -q
+uv run --locked python scripts/model_ci.py --data-dir model/data_full --profile laptop \
+  --sharrow off --output model/output_ci_off
+uv run --locked python scripts/model_ci.py --data-dir model/data_full --profile laptop \
+  --sharrow require --output model/output_ci_sh --compare-to model/output_ci_off
 ```
 
-Both runs use the same frozen 2,000-household fixture, seed 0, and two workers. The comparator
+These commands use the revised full input directory because the frozen IDs are not all present in
+the local `model/data` subarea. Both runs use the same frozen 2,000-household fixture, seed 0, and
+two workers. Use `--profile base` on both runs to check the ordinary configuration. The comparator
 aligns decoded households, people, tours, and trips by ID and requires identical choices, schedules,
 locations, capability flags, and all other non-logsum attributes. Only logsum columns permit
 floating-point roundoff (`rtol=1e-5`, `atol=1e-5`); the report records the maximum absolute
