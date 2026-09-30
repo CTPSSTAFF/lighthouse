@@ -81,3 +81,38 @@ def test_tour_person_join(monkeypatch):
     )
     pd.testing.assert_frame_equal(actual, expected)
     assert seen == [3, 1]
+
+
+def test_trip_pair_logsums_preserve_draws_and_bound_both_joins(monkeypatch):
+    seen = []
+    offsets = {}
+
+    def evaluate(state, purpose, trips, sample, tours, *args):
+        seen.append((len(trips), len(sample)))
+        assert set(trips.index) == set(sample.index)
+        attributes = trips.join(tours, on="tour_id")
+        merged = sample.join(attributes)
+        for name in ["od_logsum", "dp_logsum"]:
+            for trip in sample.index.unique():
+                offsets[trip] = offsets.get(trip, 0) + 1
+            sample[name] = merged.age + sample.index.map(offsets)
+        return sample
+
+    monkeypatch.setattr(bounded, "_compute_trip_logsums", evaluate)
+    state = SimpleNamespace(
+        filesystem=SimpleNamespace(
+            read_model_settings=lambda _: {"location_logsum_rows": 2}
+        )
+    )
+    trips = pd.DataFrame({"tour_id": [8, 9]}, index=[10, 20])
+    tours = pd.DataFrame({"age": [25, 35]}, index=[8, 9])
+    sample = pd.DataFrame({"alt_dest": [1, 2, 3, 4]}, index=[10, 10, 10, 20])
+    expected = evaluate(state, "work", trips, sample.copy(), tours)
+    offsets.clear()
+    seen.clear()
+    actual = bounded.compute_trip_logsums(
+        state, "work", trips, sample, tours, None, None, "work"
+    )
+    pd.testing.assert_frame_equal(actual, expected)
+    assert offsets == {10: 2, 20: 2}
+    assert seen == [(1, 3), (1, 1)]

@@ -57,9 +57,10 @@ destination chunk, exceeded the laptop limit at full scale. Smaller fixed target
 utility matrices; the school setting adds headroom for simultaneous worker allocations.
 
 The laptop overlay also sets `location_logsum_rows: 100000` in `laptop_memory.yaml`.
-Lighthouse batches school, workplace, nonmandatory, and at-work destination logsum joins before
+Lighthouse batches school, workplace, nonmandatory, at-work, and trip destination logsum joins before
 ActivitySim materializes person attributes for sampled alternatives. Internal utility chunking alone
-does not bound those joins. The batches preserve positional sample order and keep every chooser's alternatives together,
+does not bound those joins. Trip batches also restrict the trip-to-tour join before expanding
+sampled alternatives, preserving both out-of-direction logsums. The batches preserve positional sample order and keep every chooser's alternatives together,
 including broadcast preprocessor random draws. A batch may exceed the row target by the remaining
 alternatives for its last chooser. Destination sampling and shadow-pricing iterations are unchanged. The base profile
 keeps the upstream path. This compatibility extension is specific to the locked ActivitySim version;

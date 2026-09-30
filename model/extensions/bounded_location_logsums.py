@@ -4,15 +4,17 @@ from functools import wraps
 import logging
 
 import numpy as np
-from activitysim.abm.models import location_choice
+from activitysim.abm.models import location_choice, trip_destination
 from activitysim.abm.models.util import tour_destination
 
 logger = logging.getLogger("activitysim.extensions.bounded_location_logsums")
 _run_location_logsums = location_choice.run_location_logsums
 _run_destination_logsums = tour_destination.run_destination_logsums
+_compute_trip_logsums = trip_destination.compute_logsums
 
 
-def _bounded(state, sample, evaluate, trace_label):
+def _bounded(state, sample, evaluate, trace_label, columns=None):
+    columns = columns or [location_choice.ALT_LOGSUM]
     settings = state.filesystem.read_model_settings("laptop_memory.yaml") or {}
     rows = int(settings.get("location_logsum_rows", 0))
     if rows <= 0 or len(sample) <= rows:
@@ -34,13 +36,13 @@ def _bounded(state, sample, evaluate, trace_label):
             stop = sample.index.searchsorted(sample.index[stop - 1], side="right")
         batch = sample.iloc[start:stop].copy()
         result = evaluate(batch)
-        part = result[location_choice.ALT_LOGSUM].to_numpy()
+        part = result[columns].to_numpy()
         if values is None:
-            values = np.empty(len(sample), dtype=part.dtype)
+            values = np.empty((len(sample), len(columns)), dtype=part.dtype)
         values[start:stop] = part
         del batch, result, part
         start = stop
-    sample[location_choice.ALT_LOGSUM] = values
+    sample[columns] = values
     return sample
 
 
@@ -100,3 +102,40 @@ def run_destination_logsums(
 
 location_choice.run_location_logsums = run_location_logsums
 tour_destination.run_destination_logsums = run_destination_logsums
+
+
+@wraps(_compute_trip_logsums)
+def compute_trip_logsums(
+    state,
+    primary_purpose,
+    trips,
+    destination_sample,
+    tours_merged,
+    model_settings,
+    skim_hotel,
+    trace_label,
+):
+    def evaluate(sample):
+        # Bound both joins: trip attributes first, then sampled alternatives.
+        batch_trips = trips.loc[sample.index.unique()]
+        return _compute_trip_logsums(
+            state,
+            primary_purpose,
+            batch_trips,
+            sample,
+            tours_merged,
+            model_settings,
+            skim_hotel,
+            trace_label,
+        )
+
+    return _bounded(
+        state,
+        destination_sample,
+        evaluate,
+        trace_label,
+        columns=["od_logsum", "dp_logsum"],
+    )
+
+
+trip_destination.compute_logsums = compute_trip_logsums
