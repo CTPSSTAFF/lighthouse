@@ -11,3 +11,4 @@ from . import constraint_fixed_work_schedule as constraint_fixed_work_schedule
 
 from . import bounded_location_logsums as bounded_location_logsums
 from . import projected_stop_frequency as projected_stop_frequency
+from . import projected_trip_tours as projected_trip_tours

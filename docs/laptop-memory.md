@@ -49,6 +49,7 @@ chunk targets (ActivitySim divides them across workers):
 | Nonmandatory tour destination | 10,000 |
 | At-work subtour destination | 10,000 |
 | Nonmandatory tour scheduling | 20,000 |
+| Trip destination | 10,000 |
 | Trip mode choice | 100,000 |
 
 The upstream workplace fraction grows with population. Its sampler, and the larger nonmandatory
@@ -69,6 +70,12 @@ them onto tours. This avoids creating the complete wide `tours_merged` table. Th
 stop-frequency implementation still sees all tours, so its person and household tour counts are
 unchanged. Update that column list and run the fixture comparison when changing stop-frequency
 specifications or preprocessing.
+
+For trip destination, failed-trip retries, and trip mode choice, the laptop profile builds
+`tours_merged` using the declared trip-mode/logsum chooser columns before the join. It retains all
+tour attributes, including origin and destination, and avoids unnecessary input copies for this
+pure join. Earlier models and the base profile retain the full join. Recheck this compatibility
+extension when upgrading ActivitySim or adding models that consume the temporary table.
 
 Start with a full-geography integration sample:
 

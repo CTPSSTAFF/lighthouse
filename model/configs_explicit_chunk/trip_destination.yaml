@@ -1,0 +1,3 @@
+inherit_settings: true
+# Bound legacy destination sampling before allocating chooser-by-zone arrays.
+explicit_chunk: 10000

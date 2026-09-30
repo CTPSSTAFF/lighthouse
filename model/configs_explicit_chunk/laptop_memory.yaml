@@ -14,3 +14,5 @@ stop_frequency_person_columns:
   - trPkRetail
   - trOpRetail
   - nmRetail
+# Use declared trip-mode/logsum chooser columns before materializing tours_merged.
+project_trip_tours: true
