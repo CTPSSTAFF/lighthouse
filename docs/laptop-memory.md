@@ -73,8 +73,9 @@ specifications or preprocessing.
 
 For trip destination, failed-trip retries, and trip mode choice, the laptop profile builds
 `tours_merged` using the declared trip-mode/logsum chooser columns before the join. It retains all
-tour attributes, including origin and destination, and avoids unnecessary input copies for this
-pure join. Earlier models and the base profile retain the full join. Recheck this compatibility
+tour attributes, including origin and destination. It takes the required attributes directly from
+persons and households when available, releases the cached wide temporary person join, and avoids
+unnecessary input copies for this pure join. Earlier models and the base profile retain the full join. Recheck this compatibility
 extension when upgrading ActivitySim or adding models that consume the temporary table.
 
 Start with a full-geography integration sample:
