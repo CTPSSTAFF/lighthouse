@@ -1,6 +1,7 @@
 """Check committed inputs without loading the large skim arrays."""
 
 import json
+import os
 from pathlib import Path
 
 import openmatrix as omx
@@ -8,7 +9,7 @@ import pandas as pd
 import yaml
 
 ROOT = Path(__file__).parents[1]
-DATA = ROOT / "model/data"
+DATA = Path(os.environ.get("LIGHTHOUSE_TEST_DATA_DIR", ROOT / "model/data"))
 CONFIGS = ROOT / "model/configs"
 
 

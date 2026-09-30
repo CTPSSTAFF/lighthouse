@@ -1,0 +1,3 @@
+inherit_settings: true
+# Bound the legacy destination-sampling utility matrix across workers.
+explicit_chunk: 10000

@@ -5,6 +5,11 @@
 expected worker counts from the run plan. Adding a component or splitting/renaming a phase requires
 no monitor code changes.
 
+CPU and memory samples describe the **whole host**, including unrelated applications. The historical
+CSV columns ending in `_gb` use binary GiB (bytes divided by 1024 cubed). `--parent-pid` only
+controls when sampling stops; it does not filter resource usage to that process. Use the
+[production benchmark](restricted-memory.md) for an enforced model memory budget.
+
 ```bash
 uv run python src/lighthouse/sys_monitor.py \
   --log model/output/log/activitysim.log \

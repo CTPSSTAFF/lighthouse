@@ -1,0 +1,3 @@
+inherit_settings: true
+# Leave headroom when both workers allocate destination-sampling arrays together.
+explicit_chunk: 25000
