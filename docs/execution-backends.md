@@ -19,22 +19,21 @@ that path. Input files do not need to be reordered or rewritten.
 Lighthouse requires ActivitySim 1.6 or newer and Sharrow 2.16.2 or newer. The lockfile currently
 selects ActivitySim 1.6.0 and Sharrow 2.16.2.
 
-From the Lighthouse repository root, with the locked environment installed:
+From the model directory, with the locked environment installed:
 
 ```sh
-# Multiprocessing settings come from configs_mp; base evaluation uses NumPy/pandas.
-uv run --locked activitysim run -c model/configs_mp -c model/configs \
-  -d model/data -o model/output_numpy --ext extensions
+cd model
+# Workers import the extensions module from this working directory.
+uv run --project .. --locked activitysim run -c configs_mp -c configs \
+  -d data -o output_numpy --ext extensions
 
-# Put the Sharrow overlay ahead of the other configuration directories.
-uv run --locked activitysim run -c model/configs_sh -c model/configs_mp -c model/configs \
-  -d model/data -o model/output_sharrow --ext extensions
+uv run --project .. --locked activitysim run -c configs_sh -c configs_mp -c configs \
+  -d data -o output_sharrow --ext extensions
 ```
 
-For a single-process run, omit `-c model/configs_mp`. Use separate, fresh output directories for
-each run; do not resume an old checkpoint with a different backend or recoding configuration.
-Outputs from both modes decode origins, destinations, and assigned locations back to source zone
-IDs.
+For a single-process run, omit `-c configs_mp`. Use separate, fresh output directories for each run;
+do not resume an old checkpoint with a different backend or recoding configuration. Outputs from
+both modes decode origins, destinations, and assigned locations back to source zone IDs.
 
 `--ext extensions` is required for Lighthouse's constraints, telework components, and safe skim
 loading. The `skim_loading` extension retains the single-worker Dask guard introduced after

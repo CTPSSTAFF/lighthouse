@@ -41,6 +41,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import benchmark_support as support
+
 
 ENV_READY = "LIGHTHOUSE_DIAGNOSTIC_UV_READY"
 BYTES_PER_GIB = 1024**3
@@ -184,6 +186,7 @@ from existing job specifications.
         action="store_true",
         help="suppress progress messages and do not open the HTML report",
     )
+    parser.add_argument("--profile", choices=("base", "laptop"), default="laptop")
     parser.add_argument("--_worker-spec", type=Path, help=argparse.SUPPRESS)
     return parser.parse_args()
 
@@ -616,15 +619,12 @@ def run_model_worker(spec_path: Path) -> int:
     from activitysim.core.workflow import State
 
     model_dir = Path(spec["model_dir"])
-    configs: tuple[Path, ...]
-    if spec["multiprocess"]:
-        configs = (model_dir / "configs_mp", model_dir / "configs")
-    else:
-        configs = (model_dir / "configs",)
+    configs = support.configs(model_dir, True, spec["profile"])
 
     settings = diagnostic_settings()
     settings.update(
         {
+            "rng_base_seed": 0,
             "households_sample_size": int(spec["household_sample_size"]),
             "multiprocess": bool(spec["multiprocess"]),
             "sharrow": spec["sharrow"],
@@ -649,7 +649,7 @@ def run_model_worker(spec_path: Path) -> int:
     )
     # The ActivitySim CLI normally supplies these values.  State.run.all()
     # forwards them when it creates multiprocessing workers.
-    state.set("imported_extensions", ())
+    support.import_extensions(state, model_dir)
     state.set("run_timestamp", dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
     # track_skim_usage is an internal diagnostic step, not a model component.
     state.settings.models = [
@@ -698,6 +698,10 @@ def worker_spec_data(
     process_count: int | None,
 ) -> dict[str, Any]:
     return {
+        "profile": os.environ.get("LIGHTHOUSE_BENCHMARK_PROFILE", "laptop"),
+        "provenance": json.loads(
+            os.environ.get("LIGHTHOUSE_BENCHMARK_PROVENANCE", "{}")
+        ),
         "model_dir": str(model_dir),
         "data_dir": str(data_dir),
         "output_dir": str(output_dir),
@@ -1628,6 +1632,14 @@ def run_benchmarks(args: argparse.Namespace, repo_root: Path) -> int:
     validate_data_dir(data_dir)
 
     model_dir = repo_root / "model"
+    support.preflight(data_dir, model_dir)
+    os.environ["LIGHTHOUSE_BENCHMARK_PROFILE"] = args.profile
+    os.environ["LIGHTHOUSE_BENCHMARK_PROVENANCE"] = json.dumps(
+        {
+            "inputs": support.input_identity(data_dir),
+            "code": support.code_identity(repo_root),
+        }
+    )
     process_count = (
         args.processes
         or (resumed_process_count(result_root) if args.resume else None)

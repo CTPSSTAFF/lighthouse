@@ -36,6 +36,11 @@ uv run --project .. activitysim run -c configs_mp -c configs -d data -o ../outpu
 See [Monitoring a model run](docs/sys-monitor.md) for CPU/memory sampling and progress tracking from
 ActivitySim run plans and logs.
 
+For a full-population run on a 64 GB laptop, see [memory qualification](docs/laptop-memory.md).
+The production benchmark enforces a container limit, disables container swap, validates inputs
+and outputs, and records the complete container memory peak. The ordinary README smoke command
+uses the smaller subarea inputs and does not establish full-scale memory requirements.
+
 ## Constraint components
 
 See [Fixed work schedule](docs/fixed-work-schedule.md) for the industry/income logit prototype,

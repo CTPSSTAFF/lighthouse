@@ -162,7 +162,7 @@ def test_actual_mode_spec_boundaries_and_probabilities(tmp_path, filename, tour)
     for mode in ["WALK", "WALK_TRANSIT"]:
         assert (utilities[mode] == -999).tolist() == expected
         assert (probs[mode] == 0).tolist() == expected
-    assert (probs.RIDEHAIL > 0).all()
+    assert (probs.RIDESOURCE > 0).all()
 
 
 @pytest.mark.parametrize(

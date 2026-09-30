@@ -206,12 +206,15 @@ def compare_outputs(current, reference):
     return diagnostics
 
 
-def model_configs(output, single_process=False, sharrow="off"):
+def model_configs(output, single_process=False, sharrow="off", profile="base"):
     """Build the same execution overlays used by the documented CLI commands."""
     require(sharrow in {"off", "require"}, "Unsupported Sharrow mode")
     configs = [ROOT / "tests/model", ROOT / "model/configs_mp", ROOT / "model/configs"]
     if sharrow == "require":
         configs.insert(0, ROOT / "model/configs_sh")
+    if profile == "laptop":
+        configs.insert(0, ROOT / "model/configs_explicit_chunk")
+    (output / "sharrow_cache").mkdir(exist_ok=True)
     overlay = output / "config"
     overlay.mkdir()
     runtime = {
@@ -262,6 +265,8 @@ def main():
         type=Path,
         help="Validate against a completed opposite-backend run",
     )
+    parser.add_argument("--profile", choices=("base", "laptop"), default="base")
+    parser.add_argument("--data-dir", type=Path, default=ROOT / "model/data")
     args = parser.parse_args()
     output = args.output.resolve()
     require(not output.exists(), f"Refusing to reuse existing output: {output}")
@@ -270,7 +275,7 @@ def main():
     data.mkdir()
     report_dir = output / "report"
     report_dir.mkdir()
-    source = ROOT / "model/data"
+    source = args.data_dir.resolve()
     ids = json.loads((ROOT / "tests/fixtures/household_ids.json").read_text())[
         "household_ids"
     ]
@@ -292,14 +297,14 @@ def main():
     inputs = {"households": households, "persons": persons}
     for name, frame in inputs.items():
         frame.to_csv(data / f"{name}.csv")
-    configs = model_configs(output, args.single_process, args.sharrow)
+    configs = model_configs(output, args.single_process, args.sharrow, args.profile)
     command = [sys.executable, "-m", "activitysim", "run"]
     for config in configs:
         command += ["-c", str(config)]
     command += ["-d", str(data), "-d", str(source), "-o", str(output)]
-    if (ROOT / "extensions").is_dir():
+    if (ROOT / "model/extensions").is_dir():
         # Workers in the locked release import this as a module, not a path.
-        # The child process always runs with cwd=ROOT.
+        # The child process runs with cwd=ROOT / "model".
         command += ["--ext", "extensions"]
     env = os.environ.copy()
     for name in [
@@ -316,6 +321,8 @@ def main():
         p for config in configs if config != output / "config" for p in config.glob("*")
     ]
     metadata = {
+        "data_dir": str(source),
+        "profile": args.profile,
         "seed": 0,
         "sample_households": args.households,
         "single_process": args.single_process,
@@ -335,7 +342,7 @@ def main():
             str(p.relative_to(ROOT)): digest(p)
             for p in tracked_inputs
             + tracked_configs
-            + list((ROOT / "extensions").glob("*.py"))
+            + list((ROOT / "model/extensions").glob("*.py"))
             + [
                 ROOT / "uv.lock",
                 ROOT / "tests/model/settings.yaml",
@@ -348,7 +355,7 @@ def main():
     peak = 0
     with (report_dir / "console.log").open("w") as log:
         process = subprocess.Popen(
-            command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT
+            command, cwd=ROOT / "model", env=env, stdout=log, stderr=subprocess.STDOUT
         )
         while process.poll() is None:
             try:
