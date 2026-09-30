@@ -39,9 +39,20 @@ uv run --locked python scripts/production-benchmark.py \
 The default `--profile laptop` places `configs_explicit_chunk` before the normal configs and uses
 Sharrow with recoded zone IDs. `--profile base` explicitly omits that chunk overlay. Lighthouse
 extensions are imported by module name for the parent and spawned workers. Thread limits and Linux
-allocator settings are recorded in each run specification. Workplace location uses a fixed
-`explicit_chunk: 10000` in this profile; the upstream fractional setting scales with population
-and exceeded the laptop budget during full-population sampling.
+allocator settings are recorded in each run specification. The laptop overlay sets these absolute
+chunk targets (ActivitySim divides them across workers):
+
+| Component | `explicit_chunk` |
+| --- | ---: |
+| School location | 25,000 |
+| Workplace location | 10,000 |
+| Nonmandatory tour destination | 10,000 |
+| At-work subtour destination | 10,000 |
+| Trip mode choice | 100,000 |
+
+The upstream workplace fraction grows with population. Its sampler, and the larger nonmandatory
+destination chunk, exceeded the laptop limit at full scale. Smaller fixed targets bound those
+utility matrices; the school setting adds headroom for simultaneous worker allocations.
 
 The laptop overlay also sets `location_logsum_rows: 100000` in `laptop_memory.yaml`.
 Lighthouse batches school, workplace, nonmandatory, and at-work destination logsum joins before
