@@ -19,15 +19,16 @@ that path. Input files do not need to be reordered or rewritten.
 Lighthouse requires ActivitySim 1.6 or newer and Sharrow 2.16.2 or newer. The lockfile currently
 selects ActivitySim 1.6.0 and Sharrow 2.16.2.
 
-From the model directory, with the locked environment installed:
+From the repository root, with the locked environment installed:
 
 ```sh
+# Multiprocessing settings come from configs_mp; base evaluation uses NumPy/pandas.
 cd model
-# Workers import the extensions module from this working directory.
-uv run --project .. --locked activitysim run -c configs_mp -c configs \
+uv run --locked --project .. activitysim run -c configs_mp -c configs \
   -d data -o output_numpy --ext extensions
 
-uv run --project .. --locked activitysim run -c configs_sh -c configs_mp -c configs \
+# Put the Sharrow overlay ahead of the other configuration directories.
+uv run --locked --project .. activitysim run -c configs_sh -c configs_mp -c configs \
   -d data -o output_sharrow --ext extensions
 ```
 
@@ -55,7 +56,8 @@ The documented `python uv-local` runner can replace `uv run --locked` for siblin
 development. The optional laptop profile uses `model/configs_explicit_chunk` before the normal
 configs to bound destination sampling, scheduling, and joins. Both benchmark scripts select it by
 default; `model_ci.py` selects it with `--profile laptop`. The base configuration remains available.
-See [memory qualification](restricted-memory.md) for the tested settings and compatibility extensions.
+See [memory qualification](restricted-memory.md) for the tested settings and compatibility
+extensions.
 
 ActivitySim 1.6's zero-probability path disables utility shifting. Compiled utilities can use
 float32, so finite utilities around -127 underflow when exponentiated and incorrectly produce failed
@@ -67,21 +69,21 @@ cases; full-geography backend comparisons check actual decisions.
 ## Backend stability checks
 
 ```sh
-LIGHTHOUSE_TEST_DATA_DIR=model/data_full uv run --locked pytest tests -q
-uv run --locked python scripts/model_ci.py --data-dir model/data_full --profile laptop \
+uv run --locked pytest tests -q
+uv run --locked python scripts/model_ci.py --data-dir model/data --profile laptop \
   --sharrow off --output model/output_ci_off
-uv run --locked python scripts/model_ci.py --data-dir model/data_full --profile laptop \
+uv run --locked python scripts/model_ci.py --data-dir model/data --profile laptop \
   --sharrow require --output model/output_ci_sh --compare-to model/output_ci_off
 ```
 
-These commands use the revised full input directory because the frozen IDs are not all present in
-the local `model/data` subarea. Both runs use the same frozen 2,000-household fixture, seed 0, and
-two workers. Use `--profile base` on both runs to check the ordinary configuration. The comparator
-aligns decoded households, people, tours, and trips by ID and requires identical choices, schedules,
-locations, capability flags, and all other non-logsum attributes. Only logsum columns permit
-floating-point roundoff (`rtol=1e-5`, `atol=1e-5`); the report records the maximum absolute
-difference for each. Missing entities, mismatched columns, changed decisions, and larger logsum
-discrepancies fail CI. Internal `_original_` columns created solely by recoding are excluded.
+These commands use the updated `model/data` inputs, which contain all frozen fixture households.
+Both runs use the same 2,000-household fixture, seed 0, and two workers. Use `--profile base` on
+both runs to check the ordinary configuration. The comparator aligns decoded households, people,
+tours, and trips by ID and requires identical choices, schedules, locations, capability flags, and
+all other non-logsum attributes. Only logsum columns permit floating-point roundoff (`rtol=1e-5`,
+`atol=1e-5`); the report records the maximum absolute difference for each. Missing entities,
+mismatched columns, changed decisions, and larger logsum discrepancies fail CI. Internal
+`_original_` columns created solely by recoding are excluded.
 
 PR/main CI runs this pair. Scheduled/manual jobs also compare the larger fixture and the
 single-process fixture. The ordinary historical distribution baselines remain advisory; they are not

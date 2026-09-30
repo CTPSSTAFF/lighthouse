@@ -14,7 +14,7 @@ import yaml
 
 ROOT = Path(__file__).parents[1]
 CONFIGS = ROOT / "model/configs"
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "model"))
 from extensions.constraint_walk_ability import (  # noqa: E402
     WalkAbilitySettings,
     capability_probabilities,
