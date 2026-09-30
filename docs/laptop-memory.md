@@ -49,7 +49,7 @@ chunk targets (ActivitySim divides them across workers):
 | Nonmandatory tour destination | 10,000 |
 | At-work subtour destination | 10,000 |
 | Nonmandatory tour scheduling | 20,000 |
-| Trip destination | 10,000 |
+| Trip destination | 2,000 |
 | Trip mode choice | 100,000 |
 
 The upstream workplace fraction grows with population. Its sampler, and the larger nonmandatory
