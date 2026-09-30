@@ -44,8 +44,9 @@ allocator settings are recorded in each run specification.
 The laptop overlay also sets `location_logsum_rows: 100000` in `laptop_memory.yaml`.
 Lighthouse batches school, workplace, nonmandatory, and at-work destination logsum joins before
 ActivitySim materializes person attributes for sampled alternatives. Internal utility chunking alone
-does not bound those joins. The batches preserve positional sample order, including duplicate IDs;
-they do not change destination sampling, random draws, or shadow-pricing iterations. The base profile
+does not bound those joins. The batches preserve positional sample order and keep every chooser's alternatives together,
+including broadcast preprocessor random draws. A batch may exceed the row target by the remaining
+alternatives for its last chooser. Destination sampling and shadow-pricing iterations are unchanged. The base profile
 keeps the upstream path. This compatibility extension is specific to the locked ActivitySim version;
 recheck its interfaces and output parity when upgrading.
 

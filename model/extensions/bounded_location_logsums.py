@@ -18,15 +18,20 @@ def _bounded(state, sample, evaluate, trace_label):
     if rows <= 0 or len(sample) <= rows:
         return evaluate(sample)
 
-    # Logsum evaluation is deterministic, without sampling or random choices.
-    # Slice positionally: chooser IDs repeat and may span a boundary. Index
-    # alignment or joins between batches could multiply duplicate chooser rows.
+    # Preprocessors consume broadcast random draws once per chooser. Keep every
+    # chooser's alternatives together so batching preserves those RNG offsets.
+    # Slice and assign positionally to preserve duplicate-index row order.
+    if not sample.index.is_monotonic_increasing:
+        raise ValueError("Bounded logsum samples must be sorted by chooser ID")
     logger.info(
         "%s: bounding %s sampled rows to joins of %s", trace_label, len(sample), rows
     )
     values = None
-    for start in range(0, len(sample), rows):
+    start = 0
+    while start < len(sample):
         stop = min(start + rows, len(sample))
+        if stop < len(sample):
+            stop = sample.index.searchsorted(sample.index[stop - 1], side="right")
         batch = sample.iloc[start:stop].copy()
         result = evaluate(batch)
         part = result[location_choice.ALT_LOGSUM].to_numpy()
@@ -34,6 +39,7 @@ def _bounded(state, sample, evaluate, trace_label):
             values = np.empty(len(sample), dtype=part.dtype)
         values[start:stop] = part
         del batch, result, part
+        start = stop
     sample[location_choice.ALT_LOGSUM] = values
     return sample
 

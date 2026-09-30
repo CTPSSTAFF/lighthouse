@@ -15,12 +15,16 @@ from extensions import bounded_location_logsums as bounded  # noqa: E402
 @pytest.mark.parametrize("rows", [0, 2, 3, 100])
 def test_sample_order_and_values(monkeypatch, rows):
     seen = []
+    draws = {}
 
     def evaluate(state, segment, persons, los, sample, *args):
         seen.append(len(sample))
+        for chooser in sample.index.unique():
+            draws[chooser] = draws.get(chooser, 0) + 1
         merged = sample.join(persons)
-        sample[bounded.location_choice.ALT_LOGSUM] = np.logaddexp(
-            merged.destination.to_numpy(), merged.age.to_numpy()
+        sample[bounded.location_choice.ALT_LOGSUM] = (
+            np.logaddexp(merged.destination.to_numpy(), merged.age.to_numpy())
+            + sample.index.map(draws).to_numpy()
         )
         return sample
 
@@ -36,12 +40,14 @@ def test_sample_order_and_values(monkeypatch, rows):
     )
     expected = evaluate(state, "school", persons, None, sample.copy())
     seen.clear()
+    draws.clear()
     actual = bounded.run_location_logsums(
         state, "school", persons, None, sample, None, 0, "school", "school"
     )
+    assert draws == {1: 1, 2: 1}
     assert actual is sample
     pd.testing.assert_frame_equal(actual, expected)
-    assert max(seen) <= (rows or len(sample))
+    assert max(seen) <= (max(rows, 3) if rows else len(sample))
 
 
 def test_tour_person_join(monkeypatch):
@@ -74,4 +80,4 @@ def test_tour_person_join(monkeypatch):
         state, "shopping", persons, sample, None, None, 0, "shopping"
     )
     pd.testing.assert_frame_equal(actual, expected)
-    assert seen == [2, 2]
+    assert seen == [3, 1]
