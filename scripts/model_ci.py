@@ -297,10 +297,11 @@ def main():
     for config in configs:
         command += ["-c", str(config)]
     command += ["-d", str(data), "-d", str(source), "-o", str(output)]
-    if (ROOT / "extensions").is_dir():
-        # Workers in the locked release import this as a module, not a path.
-        # The child process always runs with cwd=ROOT.
-        command += ["--ext", "extensions"]
+    extension_package = ROOT / "model" / "extensions"
+    require(
+        extension_package.is_dir(), f"Missing model extensions: {extension_package}"
+    )
+    command += ["--ext", "extensions"]
     env = os.environ.copy()
     for name in [
         "OMP_NUM_THREADS",
@@ -348,7 +349,11 @@ def main():
     peak = 0
     with (report_dir / "console.log").open("w") as log:
         process = subprocess.Popen(
-            command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT
+            command,
+            cwd=ROOT / "model",
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
         )
         while process.poll() is None:
             try:
