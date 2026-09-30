@@ -336,7 +336,7 @@ def main():
             str(p.relative_to(ROOT)): digest(p)
             for p in tracked_inputs
             + tracked_configs
-            + list((ROOT / "extensions").glob("*.py"))
+            + list(extension_package.glob("*.py"))
             + [
                 ROOT / "uv.lock",
                 ROOT / "tests/model/settings.yaml",
