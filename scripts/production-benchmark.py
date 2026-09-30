@@ -1068,6 +1068,7 @@ def compatible_completed_result(
     if not result.succeeded:
         return None
     result.reused = True
+    result.qualification_status = "reused_not_new_measurement"
     return result
 
 
@@ -1386,7 +1387,7 @@ def format_duration(seconds: float) -> str:
 
 
 def format_gib(value: int | None) -> str:
-    return "—" if value is None else f"{value / GIB:.2f} GiB"
+    return "—" if value is None else f"{value / GIB:.2f} GiB ({value / 1e9:.2f} GB)"
 
 
 def html_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -1742,7 +1743,12 @@ def write_report(
     metadata: dict[str, Any],
     qualification_peak: int,
 ) -> None:
-    successful = [result for result in results if qualifies(result, qualification_peak)]
+    successful = [
+        result
+        for result in results
+        if metadata.get("warmup_within_budget", False)
+        and qualifies(result, qualification_peak)
+    ]
     fastest = min(successful, key=lambda result: result.duration_seconds, default=None)
     recommendation = (
         f"Fastest qualifying run: <strong>{fastest.workers} workers</strong>, "
@@ -2013,7 +2019,14 @@ def main_host(args: argparse.Namespace) -> int:
     return (
         0
         if len(results) == len(definitions)
-        and all(result.succeeded for result in results)
+        and all(
+            result.succeeded
+            and result.measurement_valid
+            and result.output_valid
+            and result.oom_events == 0
+            and result.container_peak_swap_bytes == 0
+            for result in results
+        )
         and (args.sample_households > 0 or metadata["qualified"])
         else 1
     )

@@ -57,6 +57,13 @@ development. ActivitySim 1.6 supports the additional trip-mode chunk budget in
 was isolated because ActivitySim 1.5.1 rejected it. It remains optional and is not included in base
 configuration or CI runs. The other existing component chunk settings remain in place.
 
+ActivitySim 1.6's zero-probability path disables utility shifting. Compiled utilities can use
+float32, so finite utilities around -127 underflow when exponentiated and incorrectly produce failed
+destinations. The `stable_probabilities` extension promotes that probability conversion to float64,
+matching the reference evaluator while retaining compiled utilities and float32 skim storage. Truly
+unavailable alternatives (utility -999) still have zero probability. Regression tests exercise both
+cases; full-geography backend comparisons check actual decisions.
+
 ## Backend stability checks
 
 ```sh

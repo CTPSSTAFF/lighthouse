@@ -204,7 +204,7 @@ Implement phases 1–3 and their documentation while production inputs are pendi
 the new persons file should delay harness repairs, monitor tests, container measurement tests, or
 fixture integration runs. Phase 4 is the only phase requiring the updated full population.
 
-The work is complete when the repaired tools and tests pass, reproducible full-population runs meet
-the model memory budget with valid outputs, and a representative 64 GB host demonstrates adequate
-headroom without sustained swap growth or severe memory pressure. Until that final host check, label
-the result as a measured container budget rather than a laptop guarantee.
+Under the user's acceptance amendment, this execution is complete when the repaired tools and tests
+pass and reproducible full-population runs demonstrate the approved approximately 50–55 GB container
+budget with valid outputs. Label the result as a measured proxy rather than a physical laptop
+guarantee. The representative-hardware check is deferred to a future test.
