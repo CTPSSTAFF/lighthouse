@@ -48,6 +48,7 @@ chunk targets (ActivitySim divides them across workers):
 | Workplace location | 10,000 |
 | Nonmandatory tour destination | 10,000 |
 | At-work subtour destination | 10,000 |
+| Nonmandatory tour scheduling | 20,000 |
 | Trip mode choice | 100,000 |
 
 The upstream workplace fraction grows with population. Its sampler, and the larger nonmandatory
@@ -62,6 +63,12 @@ including broadcast preprocessor random draws. A batch may exceed the row target
 alternatives for its last chooser. Destination sampling and shadow-pricing iterations are unchanged. The base profile
 keeps the upstream path. This compatibility extension is specific to the locked ActivitySim version;
 recheck its interfaces and output parity when upgrading.
+
+Stop frequency also projects the person attributes listed in `laptop_memory.yaml` before joining
+them onto tours. This avoids creating the complete wide `tours_merged` table. The original
+stop-frequency implementation still sees all tours, so its person and household tour counts are
+unchanged. Update that column list and run the fixture comparison when changing stop-frequency
+specifications or preprocessing.
 
 Start with a full-geography integration sample:
 

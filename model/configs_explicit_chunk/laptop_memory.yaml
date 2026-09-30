@@ -1,2 +1,16 @@
 # Bound the sampled-alternative/person join before internal logsum chunking.
 location_logsum_rows: 100000
+# Person/household/accessibility attributes read by the current stop-frequency
+# specs and preprocessor. All tour columns and all tour rows remain available.
+# Update this projection and recheck parity when changing those specifications.
+stop_frequency_person_columns:
+  - is_university
+  - auto_ownership
+  - female
+  - hhsize
+  - income_in_thousands
+  - num_escort_tours
+  - num_work_tours
+  - trPkRetail
+  - trOpRetail
+  - nmRetail
