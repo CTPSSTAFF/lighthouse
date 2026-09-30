@@ -26,7 +26,7 @@ TARGET_THRESHOLD: 20
 # zone passes if modeled is within percent_tolerance of  predicted_size
 PERCENT_TOLERANCE: 5
 # max percentage of zones allowed to fail
-FAIL_THRESHOLD: 10
+FAIL_THRESHOLD: 1
 # apply different targets for each segment specified in destination_size_terms.csv
 school_segmentation_targets:
   # format is segment: land_use_column
