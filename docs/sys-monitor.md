@@ -8,7 +8,7 @@ no monitor code changes.
 CPU and memory samples describe the **whole host**, including unrelated applications. The historical
 CSV columns ending in `_gb` use binary GiB (bytes divided by 1024 cubed). `--parent-pid` only
 controls when sampling stops; it does not filter resource usage to that process. Use the
-[production benchmark](laptop-memory.md) for an enforced model memory budget.
+[production benchmark](restricted-memory.md) for an enforced model memory budget.
 
 ```bash
 uv run python src/lighthouse/sys_monitor.py \

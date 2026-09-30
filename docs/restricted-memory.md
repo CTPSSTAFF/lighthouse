@@ -1,20 +1,13 @@
-# Laptop memory qualification
+# Restricted memory performance measurement
 
-The target is a complete model run on a 64 GB laptop with room for its operating system and
-background applications. See the [implementation plan](laptop-memory-qualification-plan.md). Use
-actual physical bytes when budgeting: 1 GiB is 1,073,741,824 bytes; 1 GB is 1,000,000,000 bytes.
-Benchmark `g` arguments are GiB. The tested container target is 47 GiB, with a 48.5 GiB hard limit,
-inside a Docker VM configured to 52 GiB. Docker reported 50.89 GiB usable Linux memory, leaving
-more than 2 GiB above the container limit. On a 64 GiB host, the configured VM leaves 12 GiB outside
-the VM. Reduce allocations for a smaller host or heavier background workload. Pass the limits
-explicitly: the benchmark defaults remain 48 GiB target / 50 GiB hard cap.
-
-See [measured results](laptop-memory-results.md) for completed runs, the selected four-worker configuration, and artifacts.
+The target is a complete model run on a machine with 64 GB RAM, with room for its operating system and
+background applications.
 
 ## Choose the measurement
 
-- `scripts/production-benchmark.py`: Linux cgroup v2, hard limits, no container swap, complete
-  container peak including shared pages and charged file cache. Use this for qualification.
+- `scripts/production-benchmark.py`: Use Docker (which must be available and running), Linux cgroup
+  v2, hard limits, no container swap, complete container peak including shared pages and charged
+  file cache. Use this for qualification.
 - `scripts/performance-benchmark.py`: native Sharrow/non-Sharrow performance comparison. Summed RSS
   can count shared skims repeatedly; USS excludes shared pages. Neither establishes a hard memory
   budget.
@@ -23,13 +16,27 @@ See [measured results](laptop-memory-results.md) for completed runs, the selecte
 
 ## Inputs and environment
 
-Use Python 3.10 and `uv sync --locked`. Docker must be running with cgroup v2, memory-limit support,
-and at least 2 GiB above the requested container limit. The image installs released dependencies
-from `uv.lock` without re-resolving or requiring sibling source repositories.
+Use Python 3.10 and `uv sync --locked`. For `production-benchmark`, Docker must be running with
+cgroup v2 and memory-limit support. The image installs the versions recorded in `uv.lock`;
+no sibling source repositories are needed.
 
-Supply full households, persons, land use, and OMX skims. `model/data` is a subarea. The revised
-`model/data_full` persons must contain `naics_code` for eligible workers. CSV files take precedence
-over Parquet fallbacks; keep older versions outside the input directory. Preflight checks schema,
+GB and GiB are different units: 1 GiB is about 1.074 GB. The commands below use these tested limits;
+the `g` suffix means GiB:
+
+| Setting | Tested value | Approximate GB |
+| --- | ---: | ---: |
+| Docker VM memory allocation | 52 GiB | 55.83 GB |
+| Model hard limit (`--memory-limit`) | 48.5 GiB | 52.08 GB |
+| Passing peak (`--qualification-peak`) | 47 GiB | 50.47 GB |
+
+Set the VM allocation in Docker Desktop before running. Our 52 GiB allocation provided 50.89 GiB
+of usable Linux memory, leaving over 2 GiB above the model limit. On a 64 GiB machine, that VM
+allocation leaves 12 GiB for the operating system and other applications. Check actual RAM before
+using these settings on a machine advertised as 64 GB. Keep the explicit command limits below:
+the script defaults are higher (50 GiB hard limit and 48 GiB passing peak).
+
+Supply full households, persons, land use, and OMX skims, which are not included in the Git repo; the
+included `model/data` is only a subarea. Preflight checks schema,
 IDs, household membership and sizes, employment/student/industry codes, income, and skim mappings.
 It does not modify inputs.
 
@@ -41,9 +48,9 @@ uv run --locked python scripts/production-benchmark.py \
 ## Run
 
 The default `--profile laptop` places `configs_explicit_chunk` before the normal configs and uses
-Sharrow with recoded zone IDs. `--profile base` explicitly omits that chunk overlay. Lighthouse
-extensions are imported by module name for the parent and spawned workers. Thread limits and Linux
-allocator settings are recorded in each run specification. The laptop overlay sets these absolute
+Sharrow with recoded zone IDs. `--profile base` removes these memory controls and may require
+substantially more RAM; whether it runs faster must be measured. Lighthouse extensions are imported
+by module name for the parent and spawned workers. Thread limits and Linux allocator settings are recorded in each run specification. The laptop overlay sets these absolute
 chunk targets (ActivitySim divides them across workers):
 
 | Component | `explicit_chunk` |
@@ -64,7 +71,8 @@ The laptop overlay also sets `location_logsum_rows: 100000` in `laptop_memory.ya
 Lighthouse batches school, workplace, nonmandatory, at-work, and trip destination logsum joins before
 ActivitySim materializes person attributes for sampled alternatives. Internal utility chunking alone
 does not bound those joins. Trip batches also restrict the trip-to-tour join before expanding
-sampled alternatives, preserving both out-of-direction logsums. The batches preserve positional sample order and keep every chooser's alternatives together,
+sampled alternatives, preserving both out-of-direction logsums. The batches preserve positional
+sample order and keep every chooser's alternatives together,
 including broadcast preprocessor random draws. A batch may exceed the row target by the remaining
 alternatives for its last chooser. Destination sampling and shadow-pricing iterations are unchanged. The base profile
 keeps the upstream path. This compatibility extension is specific to the locked ActivitySim version;
@@ -131,7 +139,21 @@ diagnostic: subtracting file cache lowers the apparent total, and concurrent com
 Inspect host baseline, headroom, swap growth, and pressure separately. Pre-existing host swap does
 not by itself demonstrate swapping caused by the model.
 
-A constrained run on the 128 GiB development Mac establishes a container budget. Final laptop
-validation must use the intended OS/runtime on representative 64 GB hardware and check ordinary
-interactive responsiveness, host headroom, and sustained swap growth. Do not report a physical
-laptop guarantee from the container limit alone.
+## Measured results
+
+The full population (3.60 million households and 8.67 million people) completed these tests on
+September 30, 2026. Use **four workers** with the limits above for the tested configuration.
+
+| Workers | Compilation cache | Peak RAM | Full-run time |
+| --- | --- | ---: | ---: |
+| 4 | Newly prepared | 47.50 GB | 2 h 18 m |
+| 4, fresh repeat | Reused | 50.23 GB | 2 h 18 m |
+| 2 | Reused | 47.43 GB | 3 h 19 m |
+
+Allow another two to six minutes for the separate warm-up. All runs passed output checks without
+running out of memory or using container swap. The repeated four-worker runs produced identical
+final model tables. The highest peak was only 0.24 GB below the passing target, so keep these
+limits and retest after changes to the model or inputs.
+
+These tests used model commit `2abb9bf`, its locked dependencies, and Docker on a 128 GiB ARM Mac.
+They establish the model's memory use; operation on a physical 64 GB machine has not yet been tested.

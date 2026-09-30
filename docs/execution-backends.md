@@ -55,7 +55,7 @@ The documented `python uv-local` runner can replace `uv run --locked` for siblin
 development. The optional laptop profile uses `model/configs_explicit_chunk` before the normal
 configs to bound destination sampling, scheduling, and joins. Both benchmark scripts select it by
 default; `model_ci.py` selects it with `--profile laptop`. The base configuration remains available.
-See [memory qualification](laptop-memory.md) for the tested settings and compatibility extensions.
+See [memory qualification](restricted-memory.md) for the tested settings and compatibility extensions.
 
 ActivitySim 1.6's zero-probability path disables utility shifting. Compiled utilities can use
 float32, so finite utilities around -127 underflow when exponentiated and incorrectly produce failed
