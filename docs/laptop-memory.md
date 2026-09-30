@@ -39,7 +39,9 @@ uv run --locked python scripts/production-benchmark.py \
 The default `--profile laptop` places `configs_explicit_chunk` before the normal configs and uses
 Sharrow with recoded zone IDs. `--profile base` explicitly omits that chunk overlay. Lighthouse
 extensions are imported by module name for the parent and spawned workers. Thread limits and Linux
-allocator settings are recorded in each run specification.
+allocator settings are recorded in each run specification. Workplace location uses a fixed
+`explicit_chunk: 10000` in this profile; the upstream fractional setting scales with population
+and exceeded the laptop budget during full-population sampling.
 
 The laptop overlay also sets `location_logsum_rows: 100000` in `laptop_memory.yaml`.
 Lighthouse batches school, workplace, nonmandatory, and at-work destination logsum joins before
