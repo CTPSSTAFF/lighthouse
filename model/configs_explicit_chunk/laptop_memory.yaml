@@ -1,0 +1,2 @@
+# Bound the sampled-alternative/person join before internal logsum chunking.
+location_logsum_rows: 100000

@@ -21,10 +21,14 @@ GiB. Reserve at least 12 GiB for the host; aim for more headroom where practical
 
 For a 64 GiB host, use this initial container profile:
 
-| Item | Initial budget | | --- | --- | | Host OS and background applications | At least 12 GiB | |
-Entire Docker Linux VM | 52 GiB | | Container hard limit, including charged shared memory and file
-cache | 50 GiB | | Container qualification peak | At most 48 GiB | | Container swap | Disabled | |
-`/dev/shm` capacity | 16 GiB, charged within the container limit as used |
+| Item | Initial budget |
+| --- | --- |
+| Host OS and background applications | At least 12 GiB |
+| Entire Docker Linux VM | 52 GiB |
+| Container hard limit, including charged shared memory and file cache | 50 GiB |
+| Container qualification peak | At most 48 GiB |
+| Container swap | Disabled |
+| `/dev/shm` capacity | 16 GiB, charged within the container limit as used |
 
 The VM budget leaves 2 GiB above the container limit. This is a starting allocation, not proof that
 VM overhead will always fit. Reduce the model/VM budgets if the host has less physical RAM or

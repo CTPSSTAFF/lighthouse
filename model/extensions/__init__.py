@@ -8,3 +8,5 @@ from . import constraint_school_bus_availability as constraint_school_bus_availa
 from . import constraint_walk_ability as constraint_walk_ability
 
 from . import constraint_fixed_work_schedule as constraint_fixed_work_schedule
+
+from . import bounded_location_logsums as bounded_location_logsums

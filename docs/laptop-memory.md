@@ -41,6 +41,14 @@ Sharrow with recoded zone IDs. `--profile base` explicitly omits that chunk over
 extensions are imported by module name for the parent and spawned workers. Thread limits and Linux
 allocator settings are recorded in each run specification.
 
+The laptop overlay also sets `location_logsum_rows: 100000` in `laptop_memory.yaml`.
+Lighthouse batches school, workplace, nonmandatory, and at-work destination logsum joins before
+ActivitySim materializes person attributes for sampled alternatives. Internal utility chunking alone
+does not bound those joins. The batches preserve positional sample order, including duplicate IDs;
+they do not change destination sampling, random draws, or shadow-pricing iterations. The base profile
+keeps the upstream path. This compatibility extension is specific to the locked ActivitySim version;
+recheck its interfaces and output parity when upgrading.
+
 Start with a full-geography integration sample:
 
 ```sh
