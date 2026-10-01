@@ -103,14 +103,32 @@ def validate_outputs(inputs, tables, zones):
     )
     require(trips.depart.between(1, 24).all(), "trips: invalid departure")
     require(trips.outbound.isin([True, False]).all(), "trips: invalid direction")
-    for (_, _), group in trips.groupby(["tour_id", "outbound"]):
-        group = group.sort_values("trip_num")
-        require(
-            group.trip_num.tolist() == list(range(1, len(group) + 1)),
-            "trips: broken sequence",
-        )
-        require(group.trip_count.eq(len(group)).all(), "trips: incorrect trip_count")
-        require(group.depart.is_monotonic_increasing, "trips: departure order")
+    for tour_id, group in trips.groupby("tour_id"):
+        require(set(group.outbound) == {True, False}, "trips: missing tour direction")
+        # ActivitySim 1.5.1 initialize_from_tours numbers/counts trips per
+        # (tour_id, outbound), so first_trip/last_trip describe each half-tour.
+        group = group.sort_values(["outbound", "trip_num"], ascending=[False, True])
+        tour = tours.loc[tour_id]
+        for outbound, leg in group.groupby("outbound"):
+            require(
+                leg.trip_num.tolist() == list(range(1, len(leg) + 1)),
+                "trips: broken sequence",
+            )
+            require(leg.trip_count.eq(len(leg)).all(), "trips: incorrect trip_count")
+            # The locked scheduler handles directions independently; their time
+            # ranges can overlap even when each leg is correctly ordered.
+            require(leg.depart.is_monotonic_increasing, "trips: departure order")
+            origin, destination = (
+                (tour.origin, tour.destination)
+                if outbound
+                else (tour.destination, tour.origin)
+            )
+            require(
+                leg.iloc[0].origin == origin
+                and leg.iloc[-1].destination == destination,
+                "trips: incorrect tour endpoints",
+            )
+        # Check the whole spatial path, including the outbound/inbound boundary.
         require(
             np.array_equal(
                 group.destination.to_numpy()[:-1], group.origin.to_numpy()[1:]
@@ -297,10 +315,11 @@ def main():
     for config in configs:
         command += ["-c", str(config)]
     command += ["-d", str(data), "-d", str(source), "-o", str(output)]
-    if (ROOT / "extensions").is_dir():
-        # Workers in the locked release import this as a module, not a path.
-        # The child process always runs with cwd=ROOT.
-        command += ["--ext", "extensions"]
+    extension_package = ROOT / "model" / "extensions"
+    require(
+        extension_package.is_dir(), f"Missing model extensions: {extension_package}"
+    )
+    command += ["--ext", "extensions"]
     env = os.environ.copy()
     for name in [
         "OMP_NUM_THREADS",
@@ -335,7 +354,7 @@ def main():
             str(p.relative_to(ROOT)): digest(p)
             for p in tracked_inputs
             + tracked_configs
-            + list((ROOT / "extensions").glob("*.py"))
+            + list(extension_package.glob("*.py"))
             + [
                 ROOT / "uv.lock",
                 ROOT / "tests/model/settings.yaml",
@@ -348,7 +367,11 @@ def main():
     peak = 0
     with (report_dir / "console.log").open("w") as log:
         process = subprocess.Popen(
-            command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT
+            command,
+            cwd=ROOT / "model",
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
         )
         while process.poll() is None:
             try:

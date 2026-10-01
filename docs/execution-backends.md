@@ -23,12 +23,13 @@ From the Lighthouse repository root, with the locked environment installed:
 
 ```sh
 # Multiprocessing settings come from configs_mp; base evaluation uses NumPy/pandas.
-uv run --locked activitysim run -c model/configs_mp -c model/configs \
-  -d model/data -o model/output_numpy --ext extensions
+cd model
+uv run --locked --project .. activitysim run -c configs_mp -c configs \
+  -d data -o output_numpy --ext extensions
 
 # Put the Sharrow overlay ahead of the other configuration directories.
-uv run --locked activitysim run -c model/configs_sh -c model/configs_mp -c model/configs \
-  -d model/data -o model/output_sharrow --ext extensions
+uv run --locked --project .. activitysim run -c configs_sh -c configs_mp -c configs \
+  -d data -o output_sharrow --ext extensions
 ```
 
 For a single-process run, omit `-c model/configs_mp`. Use separate, fresh output directories for
