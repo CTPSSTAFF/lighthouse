@@ -69,7 +69,7 @@ models:
   - write_data_dictionary
   - write_trip_matrices
   - write_tables
-  # - summarize # needed only for SimWrapper Viz
+  - summarize # needed only for SimWrapper Viz
 
 
 # Restart workers after the tour phase. This releases process-local heaps before
