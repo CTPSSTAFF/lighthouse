@@ -1,0 +1,3 @@
+inherit_settings: true
+# Use the same bounded sampling target as other tour destinations.
+explicit_chunk: 10000

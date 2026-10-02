@@ -1,0 +1,3 @@
+inherit_settings: true
+# Bound schedule alternatives independently of full-population segment size.
+explicit_chunk: 20000

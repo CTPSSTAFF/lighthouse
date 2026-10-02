@@ -1,0 +1,4 @@
+inherit_settings: true
+# A fraction of a full-population income segment grows beyond the laptop budget.
+# ActivitySim divides this absolute target across the configured workers.
+explicit_chunk: 10000
