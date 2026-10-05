@@ -14,7 +14,7 @@ chunk_size: 0
 
 # Memory usage increases with more processes, so be careful increasing
 # this just for speed.
-num_processes: 4
+num_processes: 16
 
 # - -------------------------
 
@@ -28,7 +28,7 @@ want_dest_choice_sample_tables: false
 # trace_hh_id:
 # trace_od: [2, 2]
 # to resume after last successful checkpoint, specify resume_after: _
-# resume_after: trip_purpose_and_destination
+# resume_after: trip_scheduling
 models:
   ### mp_initialize step
   - initialize_landuse
@@ -69,7 +69,7 @@ models:
   - write_data_dictionary
   - write_trip_matrices
   - write_tables
-  # - summarize # needed only for SimWrapper Viz
+  - summarize # needed only for SimWrapper Viz
 
 
 # Restart workers after the tour phase. This releases process-local heaps before
