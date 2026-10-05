@@ -91,8 +91,7 @@ Description,Output,Expression
 ,tours_by_tour_type_by_tour_mode_count,"tours_merged.groupby(['tour_type','tour_mode']).size().rename('tours').reset_index()"
 ,tours_by_tour_type_by_tour_mode_by_stops_count,"tours_merged.groupby(['tour_type','tour_mode','stop_frequency']).size().rename('tours').reset_index()"
 ,tours_by_tour_type_by_tod_count,"tours_merged.groupby(['tour_type','start']).size().rename('tours').reset_index()"
-,_tours_with_auto_sufficiency,"tours_merged.assign(auto_sufficiency=np.where(tours_merged['auto_ownership'] == 0, 'zero_auto_households', np.where(tours_merged['auto_ownership'] < tours_merged['num_workers'], 'autos_lt_workers', 'autos_ge_workers')))"
-,tours_by_tour_type_by_auto_sufficiency,"_tours_with_auto_sufficiency.groupby(['tour_type', 'auto_sufficiency']).size().rename('tours').reset_index()"
+,tours_by_tour_type_by_auto_sufficiency,"tours_merged.assign(auto_sufficiency=np.where(tours_merged['auto_ownership'] == 0, 'zero_auto_households', np.where(tours_merged['auto_ownership'] < tours_merged['num_workers'], 'autos_lt_workers', 'autos_ge_workers'))).groupby(['tour_type', 'auto_sufficiency']).size().rename('tours').reset_index()"
 
 # Count work tours by time of day
 ,_work_tours,trips_merged[trips_merged['tour_type'] == 'work']
