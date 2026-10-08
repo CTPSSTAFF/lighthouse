@@ -35,6 +35,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import benchmark_support as support
+
 
 GIB = 1024**3
 TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S-%f"
@@ -97,6 +99,12 @@ class RunResult:
     console_log: str
     cgroup_samples: str
     host_samples: str
+    qualification_status: str = "not_evaluated"
+    host_swap_growth_bytes: int | None = None
+    measurement_valid: bool = False
+    measurement_error: str | None = None
+    oom_events: int = 0
+    output_valid: bool = False
     reused: bool = False
     component_timings: dict[str, dict[str, float | int]] = field(default_factory=dict)
     component_memory: dict[str, dict[str, float | int]] = field(default_factory=dict)
@@ -109,6 +117,20 @@ class RunResult:
             and not self.oom_killed
             and self.safety_abort_reason is None
         )
+
+
+def qualifies(result: RunResult, target: int) -> bool:
+    return (
+        result.succeeded
+        and result.measurement_valid
+        and result.output_valid
+        and result.oom_events == 0
+        and result.container_peak_swap_bytes == 0
+        and 0 < result.container_peak_bytes <= target
+        and result.household_sample_size == 0
+        and not result.reused
+        and result.key != "cache-warmup"
+    )
 
 
 def repository_root() -> Path:
@@ -200,7 +222,7 @@ def parse_args() -> argparse.Namespace:
         "--processes",
         type=positive_int,
         nargs="+",
-        default=[2, 4, 6, 8, 10],
+        default=[2, 4],
         metavar="N",
         help="multiprocess worker counts to test, each at most 10",
     )
@@ -221,13 +243,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--memory-limit",
         type=docker_size,
-        default="52g",
+        default="50g",
         help="hard memory and memory+swap limit (default: %(default)s)",
     )
     parser.add_argument(
         "--qualification-peak",
         type=docker_size,
-        default="50g",
+        default="48g",
         help="largest peak qualifying for the 64 GB profile (default: %(default)s)",
     )
     parser.add_argument(
@@ -271,6 +293,8 @@ def parse_args() -> argparse.Namespace:
         metavar="PERCENT",
         help="stop before a sustained cgroup hard-limit breach",
     )
+    parser.add_argument("--profile", choices=("laptop", "base"), default="laptop")
+    parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--image", help="Docker image name; defaults from uv.lock")
     parser.add_argument(
         "--no-build",
@@ -360,78 +384,38 @@ def require_docker() -> dict[str, Any]:
 
 
 def locked_image_name(root: Path) -> str:
-    digest = hashlib.sha256()
-    repositories = {
-        root: (
-            root / "uv.lock",
-            root / "pyproject.toml",
-            root / "scripts" / "production-benchmark.Dockerfile",
-            root / "src",
-        ),
-        root.parent / "activitysim": (
-            root.parent / "activitysim" / "pyproject.toml",
-            root.parent / "activitysim" / "activitysim",
-        ),
-        root.parent / "sharrow": (
-            root.parent / "sharrow" / "pyproject.toml",
-            root.parent / "sharrow" / "sharrow",
-        ),
-    }
-    for repository_root, sources in repositories.items():
-        for source in sources:
-            paths = [source] if source.is_file() else sorted(source.rglob("*"))
-            for path in paths:
-                if not path.is_file() or "__pycache__" in path.parts:
-                    continue
-                digest.update(path.relative_to(repository_root).as_posix().encode())
-                digest.update(b"\0")
-                digest.update(path.read_bytes())
-                digest.update(b"\0")
-    fingerprint = digest.hexdigest()[:12]
+    paths = [
+        root / name
+        for name in (
+            "uv.lock",
+            "pyproject.toml",
+            "README.md",
+            "scripts/production-benchmark.Dockerfile",
+        )
+    ]
+    paths += sorted((root / "src").rglob("*.py"))
+    fingerprint = hashlib.sha256(
+        "".join(support.file_digest(p) for p in paths).encode()
+    ).hexdigest()[:12]
     return f"lighthouse-production-benchmark:{fingerprint}"
 
 
 def config_fingerprint(root: Path) -> str:
-    digest = hashlib.sha256()
-    for directory_name in ("configs", "configs_mp"):
-        directory = root / "model" / directory_name
-        if not directory.is_dir():
-            continue
-        for path in sorted(path for path in directory.rglob("*") if path.is_file()):
-            digest.update(path.relative_to(root).as_posix().encode())
-            digest.update(b"\0")
-            digest.update(path.read_bytes())
-            digest.update(b"\0")
-    return digest.hexdigest()
+    return hashlib.sha256(
+        json.dumps(support.code_identity(root), sort_keys=True).encode()
+    ).hexdigest()
 
 
 def build_image(root: Path, image_name: str, quiet: bool) -> None:
-    activitysim_root = root.parent / "activitysim"
-    sharrow_root = root.parent / "sharrow"
-    for package_name, package_root in (
-        ("ActivitySim", activitysim_root),
-        ("Sharrow", sharrow_root),
-    ):
-        if not (package_root / "pyproject.toml").is_file():
-            raise RuntimeError(
-                f"{package_name} checkout not found at expected path: {package_root}"
-            )
-
     command = [
         "docker",
         "build",
-        "--build-context",
-        f"activitysim={activitysim_root}",
-        "--build-context",
-        f"sharrow={sharrow_root}",
         "--file",
-        str(root / "scripts" / "production-benchmark.Dockerfile"),
+        str(root / "scripts/production-benchmark.Dockerfile"),
         "--tag",
         image_name,
         str(root),
     ]
-    if not quiet:
-        print(f"Building locked benchmark image {image_name}...", flush=True)
     run_command(command, capture=quiet)
 
 
@@ -510,6 +494,7 @@ CGROUP_FIELDS = (
     "memory_peak_bytes",
     "memory_max_bytes",
     "swap_current_bytes",
+    "swap_max_bytes",
     "anon_bytes",
     "file_bytes",
     "shmem_bytes",
@@ -527,16 +512,33 @@ CGROUP_FIELDS = (
 
 
 def read_cgroup_v2(root: Path, elapsed: float) -> dict[str, Any]:
+    required = {
+        name: _read_int(root / name)
+        for name in (
+            "memory.current",
+            "memory.peak",
+            "memory.max",
+            "memory.swap.current",
+            "memory.swap.max",
+        )
+    }
+    if not (root / "cgroup.controllers").exists() or any(
+        value is None for value in required.values()
+    ):
+        raise RuntimeError("Required cgroup v2 memory measurements/limits unavailable")
     stat = _read_key_values(root / "memory.stat")
     events = _read_key_values(root / "memory.events")
+    if not {"oom", "oom_kill"} <= events.keys() or not stat:
+        raise RuntimeError("Required cgroup memory events/stat unavailable")
     pressure = _read_pressure(root / "memory.pressure")
     return {
         "elapsed_seconds": round(elapsed, 3),
         "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "memory_current_bytes": _read_int(root / "memory.current") or 0,
-        "memory_peak_bytes": _read_int(root / "memory.peak") or 0,
-        "memory_max_bytes": _read_int(root / "memory.max") or 0,
-        "swap_current_bytes": _read_int(root / "memory.swap.current") or 0,
+        "memory_current_bytes": required["memory.current"],
+        "memory_peak_bytes": required["memory.peak"],
+        "memory_max_bytes": required["memory.max"],
+        "swap_current_bytes": required["memory.swap.current"],
+        "swap_max_bytes": required["memory.swap.max"],
         "anon_bytes": stat.get("anon", 0),
         "file_bytes": stat.get("file", 0),
         "shmem_bytes": stat.get("shmem", 0),
@@ -554,6 +556,13 @@ def read_cgroup_v2(root: Path, elapsed: float) -> dict[str, Any]:
 
 
 def cgroup_sampler(path: Path, interval: float, stop: threading.Event) -> None:
+    try:
+        _sample_cgroup(path, interval, stop)
+    except Exception as error:
+        write_json(path.with_suffix(".error.json"), {"error": str(error)})
+
+
+def _sample_cgroup(path: Path, interval: float, stop: threading.Event) -> None:
     root = Path("/sys/fs/cgroup")
     start = time.perf_counter()
     with path.open("w", newline="", encoding="utf-8") as stream:
@@ -569,7 +578,7 @@ def cgroup_sampler(path: Path, interval: float, stop: threading.Event) -> None:
 
 
 def find_table(directory: Path, stem: str) -> Path:
-    for suffix in (".parquet", ".csv"):
+    for suffix in (".csv", ".parquet"):
         path = directory / f"{stem}{suffix}"
         if path.is_file():
             return path
@@ -694,6 +703,14 @@ def container_worker(spec_path: Path) -> int:
     started = time.perf_counter()
     worker_result: dict[str, Any] = {"succeeded": False}
     try:
+        initial = read_cgroup_v2(Path("/sys/fs/cgroup"), 0)
+        if (
+            initial["memory_max_bytes"] != parse_byte_size(spec["memory_limit"])
+            or initial["swap_max_bytes"] != 0
+        ):
+            raise RuntimeError(
+                "Container memory/swap limits do not match run specification"
+            )
         import activitysim
         from activitysim.core.workflow import State
 
@@ -705,14 +722,10 @@ def container_worker(spec_path: Path) -> int:
         write_json(result_dir / "input-summary.json", summarize_input_data(data_dir))
 
         model_dir = Path(spec["model_dir"])
-        if spec["multiprocess"]:
-            configs: list[Path] = []
-            configs.extend((model_dir / "configs_mp", model_dir / "configs"))
-            configs_dir = tuple(configs)
-        else:
-            configs_dir = (model_dir / "configs",)
+        configs_dir = support.configs(model_dir, True, spec["profile"])
 
         settings = {
+            "rng_base_seed": 0,
             "households_sample_size": int(spec["household_sample_size"]),
             "multiprocess": bool(spec["multiprocess"]),
             "num_processes": int(spec["workers"]),
@@ -735,7 +748,20 @@ def container_worker(spec_path: Path) -> int:
             cache_dir=cache_dir,
             settings=settings,
         )
-        state.set("imported_extensions", ())
+        support.import_extensions(state, model_dir)
+        write_json(
+            result_dir / "effective-settings.json",
+            state.settings.model_dump(mode="json"),
+        )
+        from importlib.metadata import version
+
+        write_json(
+            result_dir / "environment.json",
+            {
+                name: version(name)
+                for name in ("activitysim", "sharrow", "numpy", "pandas")
+            },
+        )
         state.set("run_timestamp", dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
         state.settings.models = [
             model for model in state.settings.models if model != "track_skim_usage"
@@ -762,6 +788,10 @@ def container_worker(spec_path: Path) -> int:
             else:
                 state.checkpoint.close_store()
 
+        validation = support.validate_output_population(
+            data_dir, output_dir, int(spec["household_sample_size"])
+        )
+        write_json(result_dir / "output-validation.json", validation)
         output_summary = summarize_outputs(output_dir)
         write_json(result_dir / "output-summary.json", output_summary)
         worker_result = {
@@ -784,6 +814,10 @@ def container_worker(spec_path: Path) -> int:
         stop.set()
         sampler.join(timeout=max(5.0, float(spec.get("sample_interval", 1.0)) * 2))
         write_json(result_dir / "container-worker-result.json", worker_result)
+        write_json(
+            result_dir / "final-cgroup.json",
+            read_cgroup_v2(Path("/sys/fs/cgroup"), time.perf_counter() - started),
+        )
     return return_code
 
 
@@ -1034,6 +1068,7 @@ def compatible_completed_result(
     if not result.succeeded:
         return None
     result.reused = True
+    result.qualification_status = "reused_not_new_measurement"
     return result
 
 
@@ -1079,29 +1114,13 @@ def launch_container_run(
     host_min_free_percent: float,
     container_abort_percent: float,
     quiet: bool,
+    run_spec: dict[str, Any],
 ) -> RunResult:
     run_dir = result_root / definition["key"]
     run_dir.mkdir(parents=True)
     output_dir = run_dir / "model-output"
     output_dir.mkdir()
-    spec = {
-        "schema_version": 2,
-        "image_id": image_id,
-        "model_config_fingerprint": model_config_fingerprint,
-        "model_dir": "/workspace/model",
-        "data_dir": "/data",
-        "result_dir": "/results",
-        "output_dir": "/results/model-output",
-        "cache_dir": "/cache/model",
-        "multiprocess": definition["multiprocess"],
-        "workers": definition["workers"],
-        "household_sample_size": definition["household_sample_size"],
-        "sample_interval": sample_interval,
-        "sharrow": "require",
-        "memory_limit": memory_limit,
-        "shm_size": shm_size,
-        "allocator_environment": ALLOCATOR_ENV,
-    }
+    spec = run_spec
     write_json(run_dir / "run-spec.json", spec)
     container_name = (
         f"lighthouse-production-{result_root.name}-{definition['key']}".lower().replace(
@@ -1153,6 +1172,8 @@ def launch_container_run(
         )
     started_wall = dt.datetime.now(dt.timezone.utc)
     started = time.perf_counter()
+    baseline = host_memory_sample(0, macos_pressure_free_percent())
+    write_json(run_dir / "host-baseline.json", asdict(baseline))
     container_id = run_command(command).stdout.strip()
     console_path = run_dir / "console.log"
     console_stream = console_path.open("wb")
@@ -1238,6 +1259,10 @@ def launch_container_run(
         logs.terminate()
         logs.wait(timeout=10)
     console_stream.close()
+    final_host = host_memory_sample(
+        time.perf_counter() - started, macos_pressure_free_percent()
+    )
+    write_json(run_dir / "host-final.json", asdict(final_host))
     duration = time.perf_counter() - started
     state = inspect_container(container_id).get("State", {})
     return_code = int(state.get("ExitCode", waiter_stdout.strip() or 1))
@@ -1246,6 +1271,21 @@ def launch_container_run(
 
     cgroup_samples = read_cgroup_samples(run_dir / "cgroup-samples.csv")
     host_samples = read_host_samples(host_path)
+    final = read_json(run_dir / "final-cgroup.json")
+    if final:
+        cgroup_samples.append(final)
+    error = read_json(run_dir / "cgroup-samples.error.json").get("error")
+    valid = (
+        bool(cgroup_samples)
+        and bool(final)
+        and not error
+        and all(
+            sample["memory_max_bytes"] == parse_byte_size(memory_limit)
+            and sample["swap_max_bytes"] == 0
+            and sample["memory_peak_bytes"] > 0
+            for sample in cgroup_samples
+        )
+    )
     peak = max(
         (int(sample["memory_peak_bytes"]) for sample in cgroup_samples), default=0
     )
@@ -1291,6 +1331,23 @@ def launch_container_run(
         host_min_available_bytes=min(host_available) if host_available else None,
         host_peak_used_bytes=max(host_used) if host_used else None,
         host_min_macos_free_percent=min(host_pressure) if host_pressure else None,
+        host_swap_growth_bytes=(
+            None
+            if baseline.swap_used_bytes is None or final_host.swap_used_bytes is None
+            else final_host.swap_used_bytes - baseline.swap_used_bytes
+        ),
+        measurement_valid=valid,
+        measurement_error=error
+        or (
+            None if valid else "Missing final sample or invalid memory limits/readings"
+        ),
+        oom_events=max(
+            (int(x["event_oom"]) + int(x["event_oom_kill"]) for x in cgroup_samples),
+            default=0,
+        ),
+        output_valid=bool(
+            read_json(run_dir / "output-validation.json").get("validated")
+        ),
         output_dir=str(output_dir),
         console_log=str(console_path),
         cgroup_samples=str(run_dir / "cgroup-samples.csv"),
@@ -1298,6 +1355,16 @@ def launch_container_run(
         component_timings=component_timings(output_dir, console_path),
         component_memory=component_memory_summary(cgroup_samples, console_path),
         output_summary=read_json(run_dir / "output-summary.json"),
+    )
+    target = parse_byte_size(spec["qualification_peak"])
+    result.qualification_status = (
+        "qualifies"
+        if qualifies(result, target)
+        else "warmup"
+        if result.key == "cache-warmup"
+        else "sample_only"
+        if result.household_sample_size
+        else "not_qualified"
     )
     write_json(run_dir / "run-result.json", asdict(result))
     if not quiet:
@@ -1320,7 +1387,7 @@ def format_duration(seconds: float) -> str:
 
 
 def format_gib(value: int | None) -> str:
-    return "—" if value is None else f"{value / GIB:.2f} GiB"
+    return "—" if value is None else f"{value / GIB:.2f} GiB ({value / 1e9:.2f} GB)"
 
 
 def html_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -1334,14 +1401,14 @@ def html_table(headers: list[str], rows: list[list[str]]) -> str:
 def runtime_table(results: list[RunResult], report_dir: Path, target: int) -> str:
     rows = []
     for result in (result for result in results if result.key != "cache-warmup"):
-        if result.succeeded and result.container_peak_bytes <= target:
+        if qualifies(result, target):
             status = "QUALIFIES"
         elif result.oom_killed:
             status = "OOM killed"
         elif result.safety_abort_reason:
             status = "Safety stop"
         elif result.succeeded:
-            status = "Over target"
+            status = "Not qualified (see metrics)"
         else:
             status = f"Failed ({result.return_code})"
         if result.reused:
@@ -1679,9 +1746,8 @@ def write_report(
     successful = [
         result
         for result in results
-        if result.key != "cache-warmup"
-        and result.succeeded
-        and result.container_peak_bytes <= qualification_peak
+        if metadata.get("warmup_within_budget", False)
+        and qualifies(result, qualification_peak)
     ]
     fastest = min(successful, key=lambda result: result.duration_seconds, default=None)
     recommendation = (
@@ -1765,7 +1831,7 @@ def expected_run_spec(
     args: argparse.Namespace,
 ) -> dict[str, Any]:
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "image_id": image_id,
         "model_config_fingerprint": model_config_fingerprint,
         "model_dir": "/workspace/model",
@@ -1778,8 +1844,15 @@ def expected_run_spec(
         "household_sample_size": definition["household_sample_size"],
         "sample_interval": args.sample_interval,
         "sharrow": "require",
+        "qualification_peak": args.qualification_peak,
         "memory_limit": args.memory_limit,
         "shm_size": args.shm_size,
+        "allocator_environment": ALLOCATOR_ENV,
+        "thread_environment": {name: "1" for name in THREAD_LIMIT_ENV},
+        "profile": args.profile,
+        "rng_base_seed": 0,
+        "input_identity": args.input_identity,
+        "cache_identity": str(args.cache_dir.expanduser().resolve()),
     }
 
 
@@ -1795,10 +1868,21 @@ def main_host(args: argparse.Namespace) -> int:
     data_dir = args.data_dir.expanduser().resolve()
     if not data_dir.is_dir():
         raise FileNotFoundError(data_dir)
+    print("Validating input data and recording checksums...", flush=True)
+    preflight_result = support.preflight(data_dir, root / "model")
+    args.input_identity = support.input_identity(data_dir)
+    if args.preflight_only:
+        print(json.dumps(preflight_result, indent=2))
+        return 0
     cache_dir = args.cache_dir.expanduser().resolve()
     cache_dir.mkdir(parents=True, exist_ok=True)
     result_root = result_directory(root, args.output_dir, args.resume)
     docker_info = require_docker()
+    write_json(result_root / "preflight.json", preflight_result)
+    write_json(result_root / "input-identity.json", args.input_identity)
+    write_json(result_root / "code-identity.json", support.code_identity(root))
+    if str(docker_info.get("CgroupVersion")) != "2":
+        raise RuntimeError("Memory qualification requires cgroup v2")
     docker_memory = int(docker_info.get("MemTotal") or 0)
     requested_memory = parse_byte_size(args.memory_limit)
     if docker_memory < requested_memory + 2 * GIB:
@@ -1863,6 +1947,7 @@ def main_host(args: argparse.Namespace) -> int:
             host_min_free_percent=args.host_min_free_percent,
             container_abort_percent=args.container_abort_percent,
             quiet=args.quiet,
+            run_spec=expected_spec,
         )
         results.append(result)
         if not result.succeeded and not args.continue_after_failure:
@@ -1873,14 +1958,32 @@ def main_host(args: argparse.Namespace) -> int:
         input_summary = read_json(Path(result.output_dir).parent / "input-summary.json")
         if input_summary:
             break
+    warmup_ok = all(
+        r.succeeded
+        and r.measurement_valid
+        and r.output_valid
+        and not r.reused
+        and r.oom_events == 0
+        and r.container_peak_swap_bytes == 0
+        and 0 < r.container_peak_bytes <= parse_byte_size(args.qualification_peak)
+        for r in results
+        if r.key == "cache-warmup"
+    )
     metadata = {
+        "warmup_within_budget": warmup_ok,
+        "profile": args.profile,
+        "qualification_scope": "container budget; physical 64 GB laptop validation separate",
+        "qualified": warmup_ok
+        and any(
+            qualifies(r, parse_byte_size(args.qualification_peak)) for r in results
+        ),
         "generated_at": dt.datetime.now().astimezone().isoformat(),
         "data_dir": str(data_dir),
         "input_summary": input_summary,
         "household_sample_size": args.sample_households,
         "worker_counts": sorted(args.processes),
-        "memory_limit": args.memory_limit,
         "qualification_peak": args.qualification_peak,
+        "memory_limit": args.memory_limit,
         "shm_size": args.shm_size,
         "image_name": image_name,
         "image_id": image_id,
@@ -1916,7 +2019,15 @@ def main_host(args: argparse.Namespace) -> int:
     return (
         0
         if len(results) == len(definitions)
-        and all(result.succeeded for result in results)
+        and all(
+            result.succeeded
+            and result.measurement_valid
+            and result.output_valid
+            and result.oom_events == 0
+            and result.container_peak_swap_bytes == 0
+            for result in results
+        )
+        and (args.sample_households > 0 or metadata["qualified"])
         else 1
     )
 

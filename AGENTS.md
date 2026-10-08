@@ -11,8 +11,9 @@ repository root. Edit `AGENTS.md` as the source of truth, then run
   exploratory work lives in `notebooks`; operational tools live in `scripts`.
 - Read `README.md` and the relevant code and configuration before making changes. Follow existing
   conventions and verify assumptions against the current checkout.
-- Use Python 3.10 and uv as specified in `pyproject.toml`. The documented setup is `uv sync --locked`.
-  Check the dependency sources in `pyproject.toml` before changing the environment. Report missing prerequisites; do not silently replace sources or regenerate the lock.
+- Use Python 3.10 and uv as specified in `pyproject.toml`. The documented setup is
+  `uv sync --locked`. Check the dependency sources in `pyproject.toml` before changing the
+  environment. Report missing prerequisites; do not silently replace sources or regenerate the lock.
 
 ## Working practices
 
@@ -42,8 +43,8 @@ repository root. Edit `AGENTS.md` as the source of truth, then run
   invariants. Record seeds and settings for stochastic comparisons. Distinguish intended behavioral
   changes from numerical noise; do not loosen tolerances merely to make a check pass.
 - The README documents a model smoke run. Run it when appropriate and inputs are available, using a
-  separate output directory to preserve existing results. Match validation cost to the change;
-  full production simulations and benchmarks are not mandatory for every edit.
+  separate output directory to preserve existing results. Match validation cost to the change; full
+  production simulations and benchmarks are not mandatory for every edit.
 - Review the final diff. Report what changed, checks actually run, and remaining limitations. Never
   describe unrun checks as passing.
 

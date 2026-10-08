@@ -19,7 +19,7 @@ that path. Input files do not need to be reordered or rewritten.
 Lighthouse requires ActivitySim 1.6 or newer and Sharrow 2.16.2 or newer. The lockfile currently
 selects ActivitySim 1.6.0 and Sharrow 2.16.2.
 
-From the Lighthouse repository root, with the locked environment installed:
+From the repository root, with the locked environment installed:
 
 ```sh
 # Multiprocessing settings come from configs_mp; base evaluation uses NumPy/pandas.
@@ -32,10 +32,9 @@ uv run --locked --project .. activitysim run -c configs_sh -c configs_mp -c conf
   -d data -o output_sharrow --ext extensions
 ```
 
-For a single-process run, omit `-c model/configs_mp`. Use separate, fresh output directories for
-each run; do not resume an old checkpoint with a different backend or recoding configuration.
-Outputs from both modes decode origins, destinations, and assigned locations back to source zone
-IDs.
+For a single-process run, omit `-c configs_mp`. Use separate, fresh output directories for each run;
+do not resume an old checkpoint with a different backend or recoding configuration. Outputs from
+both modes decode origins, destinations, and assigned locations back to source zone IDs.
 
 `--ext extensions` is required for Lighthouse's constraints, telework components, and safe skim
 loading. The `skim_loading` extension retains the single-worker Dask guard introduced after
@@ -54,26 +53,37 @@ removes leading whitespace rejected by the CDAP expression compiler. Behavioral 
 unchanged.
 
 The documented `python uv-local` runner can replace `uv run --locked` for sibling-source
-development. ActivitySim 1.6 supports the additional trip-mode chunk budget in
-`model/configs_explicit_chunk`; add that directory before the other configs to opt in. This setting
-was isolated because ActivitySim 1.5.1 rejected it. It remains optional and is not included in base
-configuration or CI runs. The other existing component chunk settings remain in place.
+development. The optional laptop profile uses `model/configs_explicit_chunk` before the normal
+configs to bound destination sampling, scheduling, and joins. Both benchmark scripts select it by
+default; `model_ci.py` selects it with `--profile laptop`. The base configuration remains available.
+See [memory qualification](restricted-memory.md) for the tested settings and compatibility
+extensions.
+
+ActivitySim 1.6's zero-probability path disables utility shifting. Compiled utilities can use
+float32, so finite utilities around -127 underflow when exponentiated and incorrectly produce failed
+destinations. The `stable_probabilities` extension promotes that probability conversion to float64,
+matching the reference evaluator while retaining compiled utilities and float32 skim storage. Truly
+unavailable alternatives (utility -999) still have zero probability. Regression tests exercise both
+cases; full-geography backend comparisons check actual decisions.
 
 ## Backend stability checks
 
 ```sh
 uv run --locked pytest tests -q
-uv run --locked python scripts/model_ci.py --sharrow off --output model/output_ci_off
-uv run --locked python scripts/model_ci.py --sharrow require --output model/output_ci_sh \
-  --compare-to model/output_ci_off
+uv run --locked python scripts/model_ci.py --data-dir model/data --profile laptop \
+  --sharrow off --output model/output_ci_off
+uv run --locked python scripts/model_ci.py --data-dir model/data --profile laptop \
+  --sharrow require --output model/output_ci_sh --compare-to model/output_ci_off
 ```
 
-Both runs use the same frozen 2,000-household fixture, seed 0, and two workers. The comparator
-aligns decoded households, people, tours, and trips by ID and requires identical choices, schedules,
-locations, capability flags, and all other non-logsum attributes. Only logsum columns permit
-floating-point roundoff (`rtol=1e-5`, `atol=1e-5`); the report records the maximum absolute
-difference for each. Missing entities, mismatched columns, changed decisions, and larger logsum
-discrepancies fail CI. Internal `_original_` columns created solely by recoding are excluded.
+These commands use the updated `model/data` inputs, which contain all frozen fixture households.
+Both runs use the same 2,000-household fixture, seed 0, and two workers. Use `--profile base` on
+both runs to check the ordinary configuration. The comparator aligns decoded households, people,
+tours, and trips by ID and requires identical choices, schedules, locations, capability flags, and
+all other non-logsum attributes. Only logsum columns permit floating-point roundoff (`rtol=1e-5`,
+`atol=1e-5`); the report records the maximum absolute difference for each. Missing entities,
+mismatched columns, changed decisions, and larger logsum discrepancies fail CI. Internal
+`_original_` columns created solely by recoding are excluded.
 
 PR/main CI runs this pair. Scheduled/manual jobs also compare the larger fixture and the
 single-process fixture. The ordinary historical distribution baselines remain advisory; they are not

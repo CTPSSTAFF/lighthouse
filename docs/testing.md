@@ -30,6 +30,23 @@ Output directories matching `model/output*` are ignored. Input and behavioral co
 are never rewritten. These commands also work on Windows; hosted model validation is currently
 Linux-only.
 
+## Local full-geography inputs
+
+The local subarea population may not contain the frozen household IDs. Keep the manifest unchanged
+and explicitly select compatible inputs when running the laptop qualification checks:
+
+```sh
+LIGHTHOUSE_TEST_DATA_DIR=model/data_full uv run --locked pytest tests -q
+uv run --locked python scripts/model_ci.py --data-dir model/data_full --profile laptop \
+  --sharrow off --output model/output_ci_full_off
+uv run --locked python scripts/model_ci.py --data-dir model/data_full --profile laptop \
+  --sharrow require --output model/output_ci_full_sh --compare-to model/output_ci_full_off
+```
+
+The full input directory is private/local and is not uploaded by CI. This override does not replace
+the committed fixture IDs or weaken input and output checks. The runner creates its cache directory
+before spawning workers to avoid a concurrent directory-creation race.
+
 ## What runs in Actions
 
 Every pull request and push to `main` runs input and contract tests and complete model runs for
